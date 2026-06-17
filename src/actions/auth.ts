@@ -4,17 +4,17 @@ import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { users, activityTypes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { signIn, signOut, auth } from "@/lib/auth";
+import { signIn, signOut } from "@/lib/auth";
 import { updateTag } from "next/cache";
 import { v4 as uuid } from "uuid";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 
 const DEFAULT_ACTIVITIES = [
-  { name: "Siłownia", targetPerWeek: 4, icon: "Dumbbell", sortOrder: 0 },
-  { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1 },
-  { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2 },
-  { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3 },
+  { name: "Siłownia", targetPerWeek: 4, icon: "Dumbbell", sortOrder: 0, color: "#eab308" },
+  { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1, color: "#f97316" },
+  { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2, color: "#22c55e" },
+  { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3, color: "#3b82f6" },
 ];
 
 export async function register(formData: FormData) {
