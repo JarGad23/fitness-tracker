@@ -88,7 +88,7 @@ export default function AppLayout({
 
         {/* Main Content */}
         <main className="flex-1 lg:p-8">
-          <div className="lg:max-w-4xl lg:mx-auto">
+          <div className="lg:max-w-7xl lg:mx-auto">
             {children}
           </div>
         </main>
