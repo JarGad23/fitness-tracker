@@ -41,20 +41,10 @@ import {
   activityColorStyles,
 } from "@/lib/activity-colors";
 import { addWorkout, deleteWorkout } from "@/actions/workouts";
+import { DURATION_OPTIONS, durationLabel } from "@/lib/durations";
 import type { ActivityType, Workout } from "@/lib/db/schema";
 
 type WorkoutWithType = Workout & { activityType: ActivityType };
-
-const DURATION_OPTIONS = [
-  { value: "15-30", label: "15–30 min" },
-  { value: "30-45", label: "30–45 min" },
-  { value: "45-60", label: "45 min – 1 h" },
-  { value: "60-90", label: "1 – 1,5 h" },
-  { value: "90-120", label: "1,5 – 2 h" },
-];
-
-const durationLabel = (value: string | null) =>
-  DURATION_OPTIONS.find((o) => o.value === value)?.label ?? value;
 
 type AddActivityModalProps = {
   open: boolean;

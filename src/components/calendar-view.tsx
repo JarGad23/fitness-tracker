@@ -25,6 +25,7 @@ import {
   resolveActivityColor,
   activityColorStyles,
 } from "@/lib/activity-colors";
+import { durationLabel } from "@/lib/durations";
 import { AddActivityModal } from "./add-activity-modal";
 import type { ActivityType, Workout } from "@/lib/db/schema";
 
@@ -221,6 +222,60 @@ export function CalendarView({
               </button>
             );
           })}
+        </div>
+
+        {/* Readable per-day list with names (mobile) */}
+        <div className="space-y-2">
+          {weekDays.some((day) => workoutsFor(day).length > 0) ? (
+            weekDays.map((day) => {
+              const dayWorkouts = workoutsFor(day);
+              if (dayWorkouts.length === 0) return null;
+              return (
+                <button
+                  key={"list-" + toISODateString(day)}
+                  type="button"
+                  onClick={() => setSelectedDate(day)}
+                  className="flex w-full items-start gap-3 rounded-xl border border-border/50 bg-card p-3 text-left transition-colors hover:bg-muted/50"
+                >
+                  <div className="flex w-10 shrink-0 flex-col items-center">
+                    <span className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {formatDayNameShort(day)}
+                    </span>
+                    <span className="text-lg font-bold tabular-nums">
+                      {day.getDate()}
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-wrap gap-1.5 pt-1">
+                    {dayWorkouts.map((workout) => {
+                      const hex = resolveActivityColor(workout.activityType);
+                      const styles = activityColorStyles(hex);
+                      const dur = durationLabel(workout.duration);
+                      return (
+                        <span
+                          key={workout.id}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+                          style={{ ...styles.soft, ...styles.text }}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={styles.solid}
+                          />
+                          {workout.activityType.name}
+                          {dur && (
+                            <span className="opacity-70">· {dur}</span>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </button>
+              );
+            })
+          ) : (
+            <p className="py-2 text-center text-sm text-muted-foreground">
+              Brak aktywności w tym tygodniu — dotknij dzień, aby dodać
+            </p>
+          )}
         </div>
       </div>
 
