@@ -1,26 +1,25 @@
 "use client";
 
-import { Dumbbell, PersonStanding, Bike, Waves, LucideIcon, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getActivityColor } from "@/lib/activity-colors";
+import { getActivityIcon } from "@/lib/activity-icons";
+import {
+  resolveActivityColor,
+  activityColorStyles,
+} from "@/lib/activity-colors";
 import type { ActivityType, Workout } from "@/lib/db/schema";
-
-const iconMap: Record<string, LucideIcon> = {
-  Dumbbell,
-  PersonStanding,
-  Bike,
-  Waves,
-};
 
 type WeeklyProgressProps = {
   activityTypes: ActivityType[];
   workouts: (Workout & { activityType: ActivityType })[];
 };
 
-export function WeeklyProgress({ activityTypes, workouts }: WeeklyProgressProps) {
-  const getCount = (activityTypeId: string) => {
-    return workouts.filter((w) => w.activityTypeId === activityTypeId).length;
-  };
+export function WeeklyProgress({
+  activityTypes,
+  workouts,
+}: WeeklyProgressProps) {
+  const getCount = (activityTypeId: string) =>
+    workouts.filter((w) => w.activityTypeId === activityTypeId).length;
 
   return (
     <div className="space-y-3">
@@ -29,8 +28,9 @@ export function WeeklyProgress({ activityTypes, workouts }: WeeklyProgressProps)
         const target = activity.targetPerWeek;
         const percentage = Math.min((count / target) * 100, 100);
         const isComplete = count >= target;
-        const Icon = iconMap[activity.icon] || Dumbbell;
-        const colors = getActivityColor(activity.name);
+        const Icon = getActivityIcon(activity.icon);
+        const hex = resolveActivityColor(activity);
+        const styles = activityColorStyles(hex);
 
         return (
           <div
@@ -44,15 +44,13 @@ export function WeeklyProgress({ activityTypes, workouts }: WeeklyProgressProps)
           >
             <div className="flex items-center gap-3">
               <div
-                className={cn(
-                  "w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all",
-                  isComplete ? colors.fill : colors.bg
-                )}
+                className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all"
+                style={isComplete ? styles.solid : styles.soft}
               >
                 {isComplete ? (
                   <Check className="w-5 h-5 text-white" />
                 ) : (
-                  <Icon className={cn("w-5 h-5", colors.text)} />
+                  <Icon className="w-5 h-5" style={styles.text} />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -60,7 +58,13 @@ export function WeeklyProgress({ activityTypes, workouts }: WeeklyProgressProps)
                   <span className="font-semibold text-foreground text-sm">
                     {activity.name}
                   </span>
-                  <span className={cn("font-bold text-sm tabular-nums", isComplete ? "text-primary" : colors.text)}>
+                  <span
+                    className={cn(
+                      "font-bold text-sm tabular-nums",
+                      isComplete && "text-primary"
+                    )}
+                    style={isComplete ? undefined : styles.text}
+                  >
                     {count}/{target}
                   </span>
                 </div>
@@ -68,9 +72,13 @@ export function WeeklyProgress({ activityTypes, workouts }: WeeklyProgressProps)
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-500",
-                      isComplete ? "bg-primary" : colors.fill
+                      isComplete && "bg-primary"
                     )}
-                    style={{ width: `${percentage}%` }}
+                    style={
+                      isComplete
+                        ? { width: `${percentage}%` }
+                        : { width: `${percentage}%`, ...styles.solid }
+                    }
                   />
                 </div>
               </div>

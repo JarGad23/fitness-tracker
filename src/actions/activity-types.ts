@@ -16,6 +16,7 @@ export async function createActivityType(formData: FormData) {
   const name = formData.get("name") as string;
   const targetPerWeek = parseInt(formData.get("targetPerWeek") as string);
   const icon = formData.get("icon") as string;
+  const color = (formData.get("color") as string) || null;
 
   if (!name || !targetPerWeek || !icon) {
     return { error: "Wszystkie pola są wymagane" };
@@ -33,6 +34,7 @@ export async function createActivityType(formData: FormData) {
     name,
     targetPerWeek,
     icon,
+    color,
     sortOrder: maxSortOrder + 1,
   });
 
@@ -51,6 +53,7 @@ export async function updateActivityType(
   const name = formData.get("name") as string;
   const targetPerWeek = parseInt(formData.get("targetPerWeek") as string);
   const icon = formData.get("icon") as string;
+  const color = (formData.get("color") as string) || null;
 
   if (!name || !targetPerWeek || !icon) {
     return { error: "Wszystkie pola są wymagane" };
@@ -58,7 +61,7 @@ export async function updateActivityType(
 
   await db
     .update(activityTypes)
-    .set({ name, targetPerWeek, icon })
+    .set({ name, targetPerWeek, icon, color })
     .where(
       and(
         eq(activityTypes.id, id),
