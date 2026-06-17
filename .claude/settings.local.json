@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "mcp__plugin_figma_figma__whoami",
+      "mcp__plugin_figma_figma__create_new_file",
+      "mcp__plugin_figma_figma__use_figma",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "Bash(curl -s http://localhost:3000/login)"
+    ]
+  }
+}

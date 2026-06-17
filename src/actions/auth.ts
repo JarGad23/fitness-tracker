@@ -1,0 +1,91 @@
+"use server";
+
+import { hash } from "bcryptjs";
+import { db } from "@/lib/db";
+import { users, activityTypes } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { signIn, signOut, auth } from "@/lib/auth";
+import { updateTag } from "next/cache";
+import { v4 as uuid } from "uuid";
+import { redirect } from "next/navigation";
+import { AuthError } from "next-auth";
+
+const DEFAULT_ACTIVITIES = [
+  { name: "Siłownia", targetPerWeek: 4, icon: "Dumbbell", sortOrder: 0 },
+  { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1 },
+  { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2 },
+  { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3 },
+];
+
+export async function register(formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirmPassword") as string;
+
+  if (!email || !password) {
+    return { error: "Email i hasło są wymagane" };
+  }
+
+  if (password !== confirmPassword) {
+    return { error: "Hasła nie są takie same" };
+  }
+
+  if (password.length < 6) {
+    return { error: "Hasło musi mieć minimum 6 znaków" };
+  }
+
+  const existingUser = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+
+  if (existingUser) {
+    return { error: "Użytkownik o tym emailu już istnieje" };
+  }
+
+  const passwordHash = await hash(password, 12);
+  const userId = uuid();
+
+  await db.insert(users).values({
+    id: userId,
+    email,
+    passwordHash,
+  });
+
+  // Seed default activity types for new user
+  await db.insert(activityTypes).values(
+    DEFAULT_ACTIVITIES.map((activity) => ({
+      id: uuid(),
+      userId,
+      ...activity,
+    }))
+  );
+
+  redirect("/login?registered=true");
+}
+
+export async function login(formData: FormData) {
+  try {
+    await signIn("credentials", {
+      email: formData.get("email") as string,
+      password: formData.get("password") as string,
+      redirectTo: "/",
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case "CredentialsSignin":
+          return { error: "Nieprawidłowy email lub hasło" };
+        default:
+          return { error: "Wystąpił błąd podczas logowania" };
+      }
+    }
+    throw error;
+  }
+}
+
+export async function logout() {
+  updateTag("workouts");
+  updateTag("activity-types");
+  await signOut({ redirect: false });
+  redirect("/login");
+}
