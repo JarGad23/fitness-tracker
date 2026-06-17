@@ -16,7 +16,6 @@ import {
 import {
   cn,
   formatDayNameShort,
-  formatDateDisplay,
   toISODateString,
   isToday,
   getWeekDays,

@@ -26,8 +26,9 @@ async function migrate() {
     try {
       await client.execute(statement);
       console.log("✓ Success");
-    } catch (error: any) {
-      if (error.message?.includes("already exists")) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("already exists")) {
         console.log("⚠ Table already exists, skipping");
       } else {
         throw error;
