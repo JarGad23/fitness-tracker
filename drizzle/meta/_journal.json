@@ -8,6 +8,20 @@
       "when": 1780323385227,
       "tag": "0000_goofy_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781704599938,
+      "tag": "0001_brown_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781706217032,
+      "tag": "0002_blue_dagger",
+      "breakpoints": true
     }
   ]
 }
