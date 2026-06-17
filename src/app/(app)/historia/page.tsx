@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
 import { workouts, activityTypes } from "@/lib/db/schema";
@@ -10,16 +11,14 @@ import { getWeekNumber, getWeekYear } from "@/lib/utils";
 import { startOfWeek, format } from "date-fns";
 import { pl } from "date-fns/locale";
 
-async function getWeeklyHistory() {
-  "use cache: private";
+async function getWeeklyHistory(userId: string) {
+  "use cache";
   cacheTag("workouts", "activity-types");
-  cacheLife("minutes");
-
-  const session = await auth();
-  if (!session?.user?.id) return [];
+  // Long stale is safe: workout/activity mutations call updateTag(...).
+  cacheLife("hours");
 
   const userWorkouts = await db.query.workouts.findMany({
-    where: eq(workouts.userId, session.user.id),
+    where: eq(workouts.userId, userId),
     with: {
       activityType: true,
     },
@@ -27,7 +26,7 @@ async function getWeeklyHistory() {
   });
 
   const userActivityTypes = await db.query.activityTypes.findMany({
-    where: eq(activityTypes.userId, session.user.id),
+    where: eq(activityTypes.userId, userId),
   });
 
   const totalTarget = userActivityTypes.reduce(
@@ -73,38 +72,36 @@ async function getWeeklyHistory() {
   );
 }
 
-export default async function HistoriaPage() {
-  const history = await getWeeklyHistory();
+async function HistoryGrid() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+
+  const history = await getWeeklyHistory(userId);
+
+  if (history.length === 0) {
+    return (
+      <Card className="border-border/50">
+        <CardContent className="p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+            <CalendarDays className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <h3 className="font-semibold text-lg mb-2">Brak historii</h3>
+          <p className="text-muted-foreground">
+            Zacznij dodawać aktywności, a tutaj zobaczysz swoją historię!
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <div className="p-4 lg:p-0 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Historia</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Przegląd Twoich poprzednich tygodni
-          </p>
-        </div>
-        <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
-          <CalendarDays className="w-4 h-4" />
-          {history.length} tygodni
-        </div>
+    <div className="space-y-4">
+      <div className="hidden lg:flex items-center justify-end gap-2 text-sm text-muted-foreground">
+        <CalendarDays className="w-4 h-4" />
+        {history.length} tygodni
       </div>
-
-      {history.length === 0 ? (
-        <Card className="border-border/50">
-          <CardContent className="p-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <CalendarDays className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h3 className="font-semibold text-lg mb-2">Brak historii</h3>
-            <p className="text-muted-foreground">
-              Zacznij dodawać aktywności, a tutaj zobaczysz swoją historię!
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
           {history.map((week) => {
             const percentage = Math.round(
               (week.completed / week.target) * 100
@@ -171,7 +168,35 @@ export default async function HistoriaPage() {
             );
           })}
         </div>
-      )}
+      </div>
+    );
+}
+
+function HistoriaSkeleton() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {[0, 1, 2, 3].map((i) => (
+        <Card key={i} className="border-border/50 animate-pulse">
+          <CardHeader className="h-16 bg-muted/30" />
+          <CardContent className="h-20" />
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export default function HistoriaPage() {
+  return (
+    <div className="p-4 lg:p-0 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Historia</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Przegląd Twoich poprzednich tygodni
+        </p>
+      </div>
+      <Suspense fallback={<HistoriaSkeleton />}>
+        <HistoryGrid />
+      </Suspense>
     </div>
   );
 }
