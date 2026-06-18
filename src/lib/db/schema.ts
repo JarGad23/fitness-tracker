@@ -18,6 +18,7 @@ export const activityTypes = sqliteTable("activity_types", {
   name: text("name").notNull(),
   targetPerWeek: integer("target_per_week").notNull(),
   icon: text("icon").notNull(),
+  color: text("color"), // hex, e.g. "#22c55e"
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -34,6 +35,7 @@ export const workouts = sqliteTable("workouts", {
     .references(() => activityTypes.id, { onDelete: "cascade" }),
   date: text("date").notNull(), // ISO date string "2026-06-01"
   notes: text("notes"),
+  duration: text("duration"), // optional range code e.g. "45-60"
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

@@ -31,7 +31,8 @@ export async function getWeekWorkouts(startDate: string, endDate: string) {
 export async function addWorkout(
   activityTypeId: string,
   date: string,
-  notes?: string
+  notes?: string,
+  duration?: string
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -55,6 +56,7 @@ export async function addWorkout(
     activityTypeId,
     date,
     notes: notes || null,
+    duration: duration || null,
   });
 
   updateTag("workouts");

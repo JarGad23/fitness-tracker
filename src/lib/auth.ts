@@ -6,6 +6,9 @@ import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Auth.js only auto-trusts the host in dev. Under `next start` / self-hosting
+  // it must be set explicitly, otherwise it throws UntrustedHost.
+  trustHost: true,
   providers: [
     Credentials({
       name: "credentials",
