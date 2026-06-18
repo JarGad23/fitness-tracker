@@ -14,7 +14,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Settings2, Loader2, Dumbbell } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Settings2,
+  Loader2,
+  Dumbbell,
+} from "lucide-react";
 import { getActivityIcon, activityIconElement } from "@/lib/activity-icons";
 import {
   resolveActivityColor,
@@ -42,7 +49,7 @@ function ActivityTypeForm({
   const [target, setTarget] = useState(activityType?.targetPerWeek ?? 3);
   const [icon, setIcon] = useState(activityType?.icon ?? "Dumbbell");
   const [color, setColor] = useState(
-    activityType ? resolveActivityColor(activityType) : "#22c55e"
+    activityType ? resolveActivityColor(activityType) : "#22c55e",
   );
 
   async function handleSubmit(event: React.FormEvent) {
