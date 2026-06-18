@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getActivityIcon } from "@/lib/activity-icons";
@@ -7,19 +8,49 @@ import {
   resolveActivityColor,
   activityColorStyles,
 } from "@/lib/activity-colors";
+import { burstConfetti } from "@/lib/confetti";
 import type { ActivityType, Workout } from "@/lib/db/schema";
 
 type WeeklyProgressProps = {
   activityTypes: ActivityType[];
   workouts: (Workout & { activityType: ActivityType })[];
+  weekKey: string;
 };
 
 export function WeeklyProgress({
   activityTypes,
   workouts,
+  weekKey,
 }: WeeklyProgressProps) {
   const getCount = (activityTypeId: string) =>
     workouts.filter((w) => w.activityTypeId === activityTypeId).length;
+
+  // Celebrate when an activity transitions incomplete -> complete. The baseline
+  // resets per week (keyed by weekKey) so navigating to an already-complete week
+  // doesn't re-fire confetti.
+  const completedIds = activityTypes
+    .filter((a) => getCount(a.id) >= a.targetPerWeek)
+    .map((a) => a.id);
+  const completedKey = completedIds.join(",");
+  const baselineRef = useRef<{ week: string; ids: Set<string> } | null>(null);
+
+  useEffect(() => {
+    const ids = completedKey ? completedKey.split(",") : [];
+    const prev = baselineRef.current;
+    if (!prev || prev.week !== weekKey) {
+      baselineRef.current = { week: weekKey, ids: new Set(ids) };
+      return;
+    }
+    const newly = ids.filter((id) => !prev.ids.has(id));
+    if (newly.length > 0) {
+      newly.forEach((id) => {
+        const activity = activityTypes.find((a) => a.id === id);
+        const hex = activity ? resolveActivityColor(activity) : "#16a34a";
+        burstConfetti({ colors: [hex, "#ffffff", "#22c55e"] });
+      });
+      baselineRef.current = { week: weekKey, ids: new Set(ids) };
+    }
+  }, [weekKey, completedKey, activityTypes]);
 
   return (
     <div className="space-y-3">

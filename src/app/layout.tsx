@@ -19,7 +19,8 @@ export const metadata: Metadata = {
     title: "Fitness Tracker",
   },
   icons: {
-    apple: "/icons/icon-192.png",
+    icon: "/icons/icon.svg",
+    apple: "/icons/apple-touch-icon.png",
   },
 };
 

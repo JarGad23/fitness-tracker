@@ -156,7 +156,13 @@ async function ProgressSection({
     weekStartDate,
     weekEndDate
   );
-  return <WeeklyProgress activityTypes={activityTypes} workouts={workouts} />;
+  return (
+    <WeeklyProgress
+      activityTypes={activityTypes}
+      workouts={workouts}
+      weekKey={weekStartDate}
+    />
+  );
 }
 
 // --- Skeletons (sized to match the real content) ---
