@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import { login } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -20,17 +21,30 @@ import { Dumbbell, Loader2 } from "lucide-react";
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
 
   async function handleSubmit(formData: FormData) {
     setIsPending(true);
     setError(null);
-    const result = await login(formData);
-    if (result?.error) {
-      setError(result.error);
+    try {
+      const result = await login(formData);
+      if (result?.error) {
+        setError(result.error);
+        toast.error(result.error);
+        setIsPending(false);
+        return;
+      }
+      toast.success("Zalogowano");
+      router.push("/");
+      router.refresh();
+    } catch {
+      const message = "Wystąpił błąd podczas logowania";
+      setError(message);
+      toast.error(message);
+      setIsPending(false);
     }
-    setIsPending(false);
   }
 
   return (

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import Link from "next/link";
 import { register } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -19,15 +21,27 @@ import { Dumbbell, Loader2 } from "lucide-react";
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const router = useRouter();
 
   async function handleSubmit(formData: FormData) {
     setIsPending(true);
     setError(null);
-    const result = await register(formData);
-    if (result?.error) {
-      setError(result.error);
+    try {
+      const result = await register(formData);
+      if (result?.error) {
+        setError(result.error);
+        toast.error(result.error);
+        setIsPending(false);
+        return;
+      }
+      toast.success("Konto utworzone! Możesz się zalogować.");
+      router.push("/login?registered=true");
+    } catch {
+      const message = "Wystąpił błąd podczas rejestracji";
+      setError(message);
+      toast.error(message);
+      setIsPending(false);
     }
-    setIsPending(false);
   }
 
   return (

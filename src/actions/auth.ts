@@ -7,7 +7,6 @@ import { eq } from "drizzle-orm";
 import { signIn, signOut } from "@/lib/auth";
 import { updateTag } from "next/cache";
 import { v4 as uuid } from "uuid";
-import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 
 const DEFAULT_ACTIVITIES = [
@@ -60,16 +59,20 @@ export async function register(formData: FormData) {
     }))
   );
 
-  redirect("/login?registered=true");
+  return { ok: true };
 }
 
 export async function login(formData: FormData) {
   try {
+    // redirect: false — only set the session cookie here. The client navigates
+    // explicitly afterwards, so the redirect can't get swallowed by the wrapping
+    // client action (which left the form frozen with the cookie already set).
     await signIn("credentials", {
       email: formData.get("email") as string,
       password: formData.get("password") as string,
-      redirectTo: "/",
+      redirect: false,
     });
+    return { ok: true };
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
@@ -84,8 +87,7 @@ export async function login(formData: FormData) {
 }
 
 export async function logout() {
+  await signOut({ redirect: false });
   updateTag("workouts");
   updateTag("activity-types");
-  await signOut({ redirect: false });
-  redirect("/login");
 }
