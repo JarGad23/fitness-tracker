@@ -62,6 +62,42 @@ export async function addWorkout(
   updateTag("workouts");
 }
 
+export async function updateWorkout(
+  workoutId: string,
+  activityTypeId: string,
+  notes?: string,
+  duration?: string
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Nie jesteś zalogowany");
+  }
+
+  const activityType = await db.query.activityTypes.findFirst({
+    where: and(
+      eq(activityTypes.id, activityTypeId),
+      eq(activityTypes.userId, session.user.id)
+    ),
+  });
+
+  if (!activityType) {
+    throw new Error("Nie znaleziono typu aktywności");
+  }
+
+  await db
+    .update(workouts)
+    .set({
+      activityTypeId,
+      notes: notes || null,
+      duration: duration || null,
+    })
+    .where(
+      and(eq(workouts.id, workoutId), eq(workouts.userId, session.user.id))
+    );
+
+  updateTag("workouts");
+}
+
 export async function deleteWorkout(workoutId: string) {
   const session = await auth();
   if (!session?.user?.id) {

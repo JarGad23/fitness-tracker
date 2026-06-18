@@ -28,6 +28,10 @@ import {
   Clock,
   Trash2,
   Loader2,
+  ChevronDown,
+  StickyNote,
+  Pencil,
+  X,
 } from "lucide-react";
 import {
   cn,
@@ -40,7 +44,7 @@ import {
   resolveActivityColor,
   activityColorStyles,
 } from "@/lib/activity-colors";
-import { addWorkout, deleteWorkout } from "@/actions/workouts";
+import { addWorkout, updateWorkout, deleteWorkout } from "@/actions/workouts";
 import { DURATION_OPTIONS, durationLabel } from "@/lib/durations";
 import type { ActivityType, Workout } from "@/lib/db/schema";
 
@@ -71,12 +75,15 @@ export function AddActivityModal({
   const [notes, setNotes] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Reset the picked date when the modal opens for a different day
   // (derive-on-prop-change, no effect needed).
   if (dateString !== trackedDate) {
     setTrackedDate(dateString);
     setSelectedDate(date);
+    setEditingId(null);
   }
 
   const dayWorkouts = workouts.filter(
@@ -87,6 +94,15 @@ export function AddActivityModal({
     setSelectedActivity(null);
     setDuration(null);
     setNotes("");
+    setEditingId(null);
+  };
+
+  const startEditing = (workout: WorkoutWithType) => {
+    setEditingId(workout.id);
+    setSelectedActivity(workout.activityTypeId);
+    setDuration(workout.duration ?? null);
+    setNotes(workout.notes ?? "");
+    setExpandedId(null);
   };
 
   const handleSubmit = async () => {
@@ -94,17 +110,31 @@ export function AddActivityModal({
 
     setIsPending(true);
     try {
-      await addWorkout(
-        selectedActivity,
-        toISODateString(selectedDate),
-        notes || undefined,
-        duration || undefined
-      );
+      if (editingId) {
+        await updateWorkout(
+          editingId,
+          selectedActivity,
+          notes || undefined,
+          duration || undefined
+        );
+        toast.success("Zapisano zmiany");
+      } else {
+        await addWorkout(
+          selectedActivity,
+          toISODateString(selectedDate),
+          notes || undefined,
+          duration || undefined
+        );
+        toast.success("Dodano aktywność");
+      }
       resetState();
-      toast.success("Dodano aktywność");
     } catch (error) {
-      console.error("Failed to add workout:", error);
-      toast.error("Nie udało się dodać aktywności");
+      console.error("Failed to save workout:", error);
+      toast.error(
+        editingId
+          ? "Nie udało się zapisać zmian"
+          : "Nie udało się dodać aktywności"
+      );
     } finally {
       setIsPending(false);
     }
@@ -170,48 +200,94 @@ export function AddActivityModal({
                   const hex = resolveActivityColor(workout.activityType);
                   const styles = activityColorStyles(hex);
                   const isDeleting = deletingId === workout.id;
+                  const dur = durationLabel(workout.duration);
+                  const hasNotes = Boolean(workout.notes);
+                  const isExpanded = expandedId === workout.id;
+                  const isEditing = editingId === workout.id;
 
                   return (
                     <div
                       key={workout.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                      className={cn(
+                        "rounded-xl border border-border bg-card",
+                        isEditing && "ring-2 ring-primary/50"
+                      )}
                     >
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                        style={styles.soft}
-                      >
-                        <Icon className="w-4 h-4" style={styles.text} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground">
-                          {workout.activityType.name}
-                          {workout.duration && (
-                            <span className="font-normal text-muted-foreground">
-                              {" · "}
-                              {durationLabel(workout.duration)}
+                      <div className="flex items-center gap-3 p-3">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                          style={styles.soft}
+                        >
+                          <Icon className="w-4 h-4" style={styles.text} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {workout.activityType.name}
+                          </p>
+                          {dur && (
+                            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              {dur}
                             </span>
                           )}
-                        </p>
-                        {workout.notes && (
-                          <p className="text-xs text-muted-foreground truncate">
+                        </div>
+                        {hasNotes && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() =>
+                              setExpandedId(isExpanded ? null : workout.id)
+                            }
+                            aria-label={
+                              isExpanded ? "Ukryj notatkę" : "Pokaż notatkę"
+                            }
+                            aria-expanded={isExpanded}
+                            className="text-muted-foreground"
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "w-4 h-4 transition-transform",
+                                isExpanded && "rotate-180"
+                              )}
+                            />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => startEditing(workout)}
+                          disabled={isDeleting}
+                          aria-label="Edytuj aktywność"
+                          className={cn(
+                            "text-muted-foreground hover:text-primary",
+                            isEditing && "text-primary"
+                          )}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleDelete(workout.id)}
+                          disabled={isDeleting}
+                          aria-label="Usuń aktywność"
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </div>
+                      {hasNotes && isExpanded && (
+                        <div className="flex gap-2 border-t border-border px-3 py-2.5 text-sm text-muted-foreground">
+                          <StickyNote className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p className="whitespace-pre-wrap break-words">
                             {workout.notes}
                           </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(workout.id)}
-                        disabled={isDeleting}
-                        aria-label="Usuń aktywność"
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        {isDeleting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -220,7 +296,9 @@ export function AddActivityModal({
           )}
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Dodaj aktywność</Label>
+            <Label className="text-sm font-medium">
+              {editingId ? "Edytuj aktywność" : "Dodaj aktywność"}
+            </Label>
             <div className="grid grid-cols-2 gap-3">
               {activityTypes.map((activity) => {
                 const Icon = getActivityIcon(activity.icon);
@@ -309,19 +387,37 @@ export function AddActivityModal({
         </div>
 
         <div className="flex gap-3 pt-2">
-          <Button
-            variant="outline"
-            onClick={handleClose}
-            className="flex-1 h-12 rounded-xl"
-          >
-            Zamknij
-          </Button>
+          {editingId ? (
+            <Button
+              variant="outline"
+              onClick={resetState}
+              disabled={isPending}
+              className="flex-1 h-12 rounded-xl"
+            >
+              <X className="w-4 h-4" />
+              Anuluj
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="flex-1 h-12 rounded-xl"
+            >
+              Zamknij
+            </Button>
+          )}
           <Button
             onClick={handleSubmit}
             disabled={!selectedActivity || isPending}
             className="flex-[2] h-12 rounded-xl"
           >
-            {isPending ? "Dodawanie..." : "Dodaj"}
+            {isPending
+              ? editingId
+                ? "Zapisywanie..."
+                : "Dodawanie..."
+              : editingId
+                ? "Zapisz"
+                : "Dodaj"}
           </Button>
         </div>
       </DialogContent>
