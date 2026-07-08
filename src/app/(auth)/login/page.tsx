@@ -11,8 +11,6 @@ export default function LoginPage() {
 
 function LoginFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-muted/30 via-background to-primary/5">
-      <div className="w-full max-w-md h-[500px] rounded-xl bg-muted/50 animate-pulse" />
-    </div>
+    <div className="h-[440px] w-full animate-pulse rounded-3xl bg-card ring-1 ring-foreground/10" />
   );
 }

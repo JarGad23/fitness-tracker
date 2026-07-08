@@ -1,6 +1,6 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
-import { workouts, activityTypes } from "@/lib/db/schema";
+import { workouts, activityTypes, healthMetrics } from "@/lib/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 
 // Runtime auth (cookies) is read by the caller and the user id is passed in as an
@@ -40,5 +40,25 @@ export async function getCachedWorkoutsInRange(
       activityType: true,
     },
     orderBy: (workouts, { asc }) => [asc(workouts.date), asc(workouts.createdAt)],
+  });
+}
+
+export async function getCachedHealthMetricsInRange(
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  "use cache";
+  cacheTag("health-metrics");
+  // Long stale is safe: the /api/watch-sync webhook calls updateTag("health-metrics").
+  cacheLife("hours");
+
+  return db.query.healthMetrics.findMany({
+    where: and(
+      eq(healthMetrics.userId, userId),
+      gte(healthMetrics.date, startDate),
+      lte(healthMetrics.date, endDate)
+    ),
+    orderBy: (healthMetrics, { asc }) => [asc(healthMetrics.date)],
   });
 }
