@@ -1,4 +1,10 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 export const users = sqliteTable("users", {
@@ -43,20 +49,28 @@ export const workouts = sqliteTable("workouts", {
 });
 
 // Apple Watch / Apple Health metrics, ingested via the /api/watch-sync webhook.
-export const healthMetrics = sqliteTable("health_metrics", {
-  id: text("id").primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  date: text("date").notNull(), // ISO date string "2026-06-01"
-  activeCalories: integer("active_calories"),
-  restingHr: integer("resting_hr"),
-  sleepHours: real("sleep_hours"),
-  notes: text("notes"),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+// One row per user per day: Shortcuts may re-send the same day, so the webhook
+// upserts on the (user_id, date) unique index below.
+export const healthMetrics = sqliteTable(
+  "health_metrics",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // ISO date string "2026-06-01"
+    activeCalories: integer("active_calories"),
+    restingHr: integer("resting_hr"),
+    sleepHours: real("sleep_hours"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("health_metrics_user_date_unique").on(table.userId, table.date),
+  ]
+);
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({

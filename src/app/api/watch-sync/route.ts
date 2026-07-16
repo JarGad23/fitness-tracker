@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { users, healthMetrics } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 
 // Called from Apple Shortcuts (no NextAuth session), so it is protected by a
 // static bearer token in the WATCH_SYNC_SECRET env var. Runs on the default
@@ -66,17 +66,26 @@ export async function POST(request: Request) {
   const toFloat = (v: unknown) =>
     typeof v === "number" ? v : v == null ? null : Number(v) || null;
 
-  await db.insert(healthMetrics).values({
-    id: uuid(),
-    userId: user.id,
-    date,
+  const metrics = {
     activeCalories: toInt(active_calories),
     restingHr: toInt(resting_hr),
     sleepHours: toFloat(sleep_hours),
     notes: typeof notes === "string" ? notes : null,
-  });
+  };
 
-  updateTag("health-metrics");
+  // Shortcuts can re-send the same day (manual re-run, retry, a later sync with
+  // fuller data), so the latest payload for a day overwrites the previous one
+  // instead of piling up rows. id/createdAt stay as first written.
+  await db
+    .insert(healthMetrics)
+    .values({ id: uuid(), userId: user.id, date, ...metrics })
+    .onConflictDoUpdate({
+      target: [healthMetrics.userId, healthMetrics.date],
+      set: metrics,
+    });
+
+  // Not updateTag: that one throws outside a Server Action, and this is a route.
+  revalidateTag("health-metrics", "max");
 
   return NextResponse.json({ success: true });
 }

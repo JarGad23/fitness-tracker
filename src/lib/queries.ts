@@ -50,7 +50,7 @@ export async function getCachedHealthMetricsInRange(
 ) {
   "use cache";
   cacheTag("health-metrics");
-  // Long stale is safe: the /api/watch-sync webhook calls updateTag("health-metrics").
+  // Long stale is safe: the /api/watch-sync webhook calls revalidateTag("health-metrics").
   cacheLife("hours");
 
   return db.query.healthMetrics.findMany({

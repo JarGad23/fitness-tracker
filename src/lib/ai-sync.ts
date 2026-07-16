@@ -122,9 +122,23 @@ export function buildCoachMarkdown(
     "---",
     "",
     "## Instrukcja dla AI",
-    "Przeanalizuj powyższe dane i zaproponuj cele tygodniowe (`target_per_week`) na",
-    "nadchodzący tydzień. Odpowiedz **wyłącznie** blokiem JSON w poniższym formacie",
-    "(bez komentarzy), używając dokładnie tych samych nazw aktywności:",
+    "Jesteś moim trenerem personalnym. Przeanalizuj powyższe dane i odpowiedz po polsku,",
+    "w tej kolejności:",
+    "",
+    "1. **Ocena tygodnia** — co poszło dobrze, a co słabo (2–3 zdania).",
+    "2. **Trend** — porównaj bieżący tydzień z poprzednim.",
+    "3. **Samopoczucie i regeneracja** — wnioski z ocen samopoczucia (1–5), snu i tętna",
+    "   spoczynkowego. Pomiń ten punkt, jeśli danych brak.",
+    "4. **Rekomendacje** — 3 konkretne rady na nadchodzący tydzień.",
+    "5. **Uzasadnienie celów** — dlaczego proponujesz właśnie takie liczby.",
+    "",
+    "Jeśli w danych są same zera lub jest ich za mało na sensowne wnioski — napisz to",
+    "wprost, zamiast zgadywać.",
+    "",
+    "**Na samym końcu** odpowiedzi umieść blok JSON z celami na nadchodzący tydzień.",
+    "Użyj dokładnie tych samych nazw aktywności co poniżej — aplikacja dopasowuje cele",
+    "po nazwie, więc przetłumaczona lub zmieniona nazwa zostanie zignorowana.",
+    "Nie umieszczaj w odpowiedzi żadnego innego bloku ```json```.",
     "",
     "```json",
     "{",
@@ -145,10 +159,18 @@ export function parseAITargets(text: string): ParsedTarget[] {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Pusta zawartość");
 
+  // The coach replies with a written report *and* the JSON block, so pick the fence
+  // deliberately rather than taking the first one: prefer ```json fences, and among
+  // those take the last, since the prompt asks for it at the very end. Falls back to
+  // any fence, then to the whole text (a raw JSON paste).
   let jsonText = trimmed;
-  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenceMatch) {
-    jsonText = fenceMatch[1].trim();
+  const jsonFences = [...trimmed.matchAll(/```json\s*([\s\S]*?)```/gi)];
+  const fences =
+    jsonFences.length > 0
+      ? jsonFences
+      : [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
+  if (fences.length > 0) {
+    jsonText = fences[fences.length - 1][1].trim();
   }
 
   let parsed: unknown;
