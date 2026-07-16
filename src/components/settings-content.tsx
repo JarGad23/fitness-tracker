@@ -46,7 +46,11 @@ function ActivityTypeForm({
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [name, setName] = useState(activityType?.name ?? "");
-  const [target, setTarget] = useState(activityType?.targetPerWeek ?? 3);
+  // Keep the target as a raw string so the field can be cleared and retyped
+  // freely; it is parsed and clamped to 1–14 on submit.
+  const [target, setTarget] = useState(
+    String(activityType?.targetPerWeek ?? 3),
+  );
   const [icon, setIcon] = useState(activityType?.icon ?? "Dumbbell");
   const [color, setColor] = useState(
     activityType ? resolveActivityColor(activityType) : "#22c55e",
@@ -59,10 +63,12 @@ function ActivityTypeForm({
       return;
     }
 
+    const targetNum = Math.min(14, Math.max(1, parseInt(target, 10) || 1));
+
     setIsPending(true);
     const formData = new FormData();
     formData.set("name", name.trim());
-    formData.set("targetPerWeek", String(target));
+    formData.set("targetPerWeek", String(targetNum));
     formData.set("icon", icon);
     formData.set("color", color);
 
@@ -101,7 +107,9 @@ function ActivityTypeForm({
           <p className="truncate font-semibold">
             {name.trim() || "Nazwa aktywności"}
           </p>
-          <p className="text-sm text-muted-foreground">{target}x / tydzień</p>
+          <p className="text-sm text-muted-foreground">
+            {parseInt(target, 10) || 0}x / tydzień
+          </p>
         </div>
       </div>
 
@@ -125,11 +133,17 @@ function ActivityTypeForm({
         </Label>
         <Input
           id="targetPerWeek"
-          type="number"
-          min={1}
-          max={14}
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
           value={target}
-          onChange={(e) => setTarget(Number(e.target.value) || 1)}
+          onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
+          onBlur={() =>
+            setTarget((t) =>
+              String(Math.min(14, Math.max(1, parseInt(t, 10) || 1))),
+            )
+          }
+          placeholder="np. 3"
           required
           className="h-12 rounded-xl px-4"
         />

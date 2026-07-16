@@ -4,80 +4,60 @@ import {
   PersonStanding,
   Bike,
   Waves,
+  Footprints,
+  Accessibility,
+  Mountain,
+  MountainSnow,
+  Snowflake,
+  Volleyball,
+  Goal,
+  Sailboat,
+  Sword,
+  Swords,
+  Flame,
   Activity,
   Heart,
   HeartPulse,
-  Flame,
-  Footprints,
-  Mountain,
+  Zap,
+  Timer,
+  Target,
   Trophy,
   Medal,
-  Timer,
-  Zap,
-  Target,
-  Bird,
-  Dog,
-  TreePine,
-  Tent,
-  Compass,
-  Sun,
-  Moon,
-  Snowflake,
   Wind,
-  Droplet,
-  Star,
-  Sparkles,
-  Rocket,
-  Anchor,
-  Sailboat,
   Music,
-  Gamepad2,
-  Bed,
-  Apple,
-  Coffee,
   Brain,
   type LucideIcon,
 } from "lucide-react";
 
 // Shared icon set used by the picker AND everywhere an activity icon renders,
-// so any chosen icon resolves consistently.
+// so any chosen icon resolves consistently. Curated to sport / fitness themes.
 export const ACTIVITY_ICONS: { name: string; Icon: LucideIcon }[] = [
-  { name: "Dumbbell", Icon: Dumbbell },
-  { name: "PersonStanding", Icon: PersonStanding },
-  { name: "Bike", Icon: Bike },
-  { name: "Waves", Icon: Waves },
-  { name: "Activity", Icon: Activity },
-  { name: "Heart", Icon: Heart },
-  { name: "HeartPulse", Icon: HeartPulse },
-  { name: "Flame", Icon: Flame },
-  { name: "Footprints", Icon: Footprints },
-  { name: "Mountain", Icon: Mountain },
-  { name: "Trophy", Icon: Trophy },
-  { name: "Medal", Icon: Medal },
-  { name: "Timer", Icon: Timer },
-  { name: "Zap", Icon: Zap },
-  { name: "Target", Icon: Target },
-  { name: "Bird", Icon: Bird },
-  { name: "Dog", Icon: Dog },
-  { name: "TreePine", Icon: TreePine },
-  { name: "Tent", Icon: Tent },
-  { name: "Compass", Icon: Compass },
-  { name: "Sun", Icon: Sun },
-  { name: "Moon", Icon: Moon },
-  { name: "Snowflake", Icon: Snowflake },
-  { name: "Wind", Icon: Wind },
-  { name: "Droplet", Icon: Droplet },
-  { name: "Star", Icon: Star },
-  { name: "Sparkles", Icon: Sparkles },
-  { name: "Rocket", Icon: Rocket },
-  { name: "Anchor", Icon: Anchor },
-  { name: "Sailboat", Icon: Sailboat },
-  { name: "Music", Icon: Music },
-  { name: "Gamepad2", Icon: Gamepad2 },
-  { name: "Bed", Icon: Bed },
-  { name: "Apple", Icon: Apple },
-  { name: "Coffee", Icon: Coffee },
-  { name: "Brain", Icon: Brain },
+  { name: "Dumbbell", Icon: Dumbbell }, // siłownia
+  { name: "PersonStanding", Icon: PersonStanding }, // bieganie / stretching
+  { name: "Footprints", Icon: Footprints }, // bieganie / chód
+  { name: "Bike", Icon: Bike }, // rower
+  { name: "Waves", Icon: Waves }, // pływanie / basen
+  { name: "Accessibility", Icon: Accessibility }, // aktywność / mobilność
+  { name: "Mountain", Icon: Mountain }, // turystyka / wspinaczka
+  { name: "MountainSnow", Icon: MountainSnow }, // narty / sporty górskie
+  { name: "Snowflake", Icon: Snowflake }, // sporty zimowe
+  { name: "Volleyball", Icon: Volleyball }, // siatkówka / gry zespołowe
+  { name: "Goal", Icon: Goal }, // piłka nożna / bramka
+  { name: "Sailboat", Icon: Sailboat }, // żeglarstwo / sporty wodne
+  { name: "Sword", Icon: Sword }, // sztuki walki / szermierka
+  { name: "Swords", Icon: Swords }, // sporty walki
+  { name: "Flame", Icon: Flame }, // cardio / spalanie
+  { name: "Activity", Icon: Activity }, // tętno / aktywność
+  { name: "Heart", Icon: Heart }, // kondycja
+  { name: "HeartPulse", Icon: HeartPulse }, // tętno
+  { name: "Zap", Icon: Zap }, // HIIT / energia
+  { name: "Timer", Icon: Timer }, // interwały
+  { name: "Target", Icon: Target }, // cel
+  { name: "Trophy", Icon: Trophy }, // osiągnięcia
+  { name: "Medal", Icon: Medal }, // osiągnięcia
+  { name: "Wind", Icon: Wind }, // sporty na świeżym powietrzu
+  { name: "Music", Icon: Music }, // taniec / fitness
+  { name: "Brain", Icon: Brain }, // joga / medytacja
 ];
 
 const ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(

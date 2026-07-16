@@ -22,6 +22,20 @@
       "when": 1781706217032,
       "tag": "0002_blue_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783036800000,
+      "tag": "0003_watch_and_feeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784217600000,
+      "tag": "0004_health_metrics_unique",
+      "breakpoints": true
     }
   ]
 }

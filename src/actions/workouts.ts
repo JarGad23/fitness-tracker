@@ -32,7 +32,8 @@ export async function addWorkout(
   activityTypeId: string,
   date: string,
   notes?: string,
-  duration?: string
+  duration?: string,
+  feelingScore?: number
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -57,6 +58,7 @@ export async function addWorkout(
     date,
     notes: notes || null,
     duration: duration || null,
+    feelingScore: feelingScore ?? null,
   });
 
   updateTag("workouts");
@@ -66,7 +68,8 @@ export async function updateWorkout(
   workoutId: string,
   activityTypeId: string,
   notes?: string,
-  duration?: string
+  duration?: string,
+  feelingScore?: number
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -90,6 +93,7 @@ export async function updateWorkout(
       activityTypeId,
       notes: notes || null,
       duration: duration || null,
+      feelingScore: feelingScore ?? null,
     })
     .where(
       and(eq(workouts.id, workoutId), eq(workouts.userId, session.user.id))

@@ -38,8 +38,9 @@ The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Wind
 
 ## 4. Secrets
 
-- `.env` (gitignored) holds `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`. **Never commit or paste real values** (they leaked once via HANDOFF.md and were rotated; history was rewritten + force-pushed).
+- `.env` (gitignored) holds `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`, `WATCH_SYNC_SECRET`. **Never commit or paste real values** (they leaked once via HANDOFF.md and were rotated; history was rewritten + force-pushed).
 - For deploy: also set `AUTH_URL` to the real origin. `AUTH_SECRET` can be regenerated with `openssl rand -base64 32` (logs everyone out, harmless).
+- `WATCH_SYNC_SECRET` — bearer token for `POST /api/watch-sync` (Apple Shortcuts). Generate with `openssl rand -hex 32`. **Must be set on Vercel too**, otherwise the webhook returns 500 `Server misconfigured`.
 
 ---
 
@@ -50,7 +51,8 @@ The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Wind
 - **Auth is read OUTSIDE the cache:** each dynamic Suspense child calls `await auth()` to get `userId`, then calls the cached query. This is the Vercel-preferred pattern.
 - **Do NOT use `"use cache: private"`** — it's experimental, browser-memory-only, "not for production." We migrated off it.
 - **Do NOT use `"use cache: remote"`** for per-user data — near-zero hit rate; docs say fetch user data from source. Reserve `remote` for a future shared/expensive query (e.g. cross-user aggregate), where it's a one-line swap.
-- **Long `cacheLife` stale is intentional and safe** because every mutation calls `updateTag("workouts" | "activity-types")`, invalidating immediately. (activity-types → `cacheLife("days")`, workouts → `cacheLife("hours")`.)
+- **Long `cacheLife` stale is intentional and safe** because every mutation calls `updateTag("workouts" | "activity-types" | "health-metrics")`, invalidating immediately. (activity-types → `cacheLife("days")`, workouts / health-metrics → `cacheLife("hours")`.)
+- **⚠️ `updateTag` throws outside a Server Action.** Next.js 16 checks `workStore.page.endsWith('/route')` and throws `E872`, which surfaces as a **bare 500 with no JSON body** — it looks like a DB failure, not a cache bug. Server Actions → `updateTag(tag)`. Route Handlers → `revalidateTag(tag, "max")` (the 2nd arg is required, else a deprecation warning is logged). This bit us in `/api/watch-sync`: `tsc` was clean while every request 500'd. A bare 4xx/5xx **with no JSON body** never came from our code.
 - **PPR layout pattern:** pages render a static shell (card frames, titles) and wrap each data region in its own `<Suspense>` with a skeleton. See `src/app/(app)/page.tsx`, `historia/page.tsx`, `ustawienia/page.tsx`. Sections each call `auth()` + cached queries; same-key queries dedupe within a request.
 - **No React Query.** It would duplicate `use cache`/PPR and move fetching client-side. For optimistic UI use React 19 `useOptimistic`. Revisit only for offline-PWA sync / polling / heavy client filtering.
 - **In dev, skeletons show on every navigation** (dev disables the client Router Cache); in a prod build, revisits are instant — this is expected, not a bug.
@@ -82,39 +84,60 @@ The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Wind
 | Settings (icon + color pickers, live preview) | `src/components/settings-content.tsx`, `icon-picker.tsx`, `color-picker.tsx` |
 | Cached queries | `src/lib/queries.ts` |
 | Colors / icons helpers | `src/lib/activity-colors.ts`, `src/lib/activity-icons.ts` |
-| Server actions | `src/actions/workouts.ts`, `activity-types.ts`, `auth.ts` |
+| Server actions | `src/actions/workouts.ts`, `activity-types.ts`, `auth.ts`, `ai-sync.ts` |
+| AI Coach export/import (pure fns) | `src/lib/ai-sync.ts` (`buildCoachMarkdown`, `parseAITargets`) |
+| AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
+| Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
+| Webhook test script (Windows) | `scripts/test-watch-sync.ps1` |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
+| Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
 | DB schema | `src/lib/db/schema.ts` |
 
 ---
 
 ## 7. Database
 
-Turso (libSQL). Three tables.
+Turso (libSQL). Four tables.
 
 - **users**: id, email, password_hash, created_at
 - **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, sort_order, created_at
-- **workouts**: id, user_id→users, activity_type_id→activity_types, date (ISO "YYYY-MM-DD"), notes (nullable), **duration (nullable, range code e.g. "45-60")**, created_at
+- **workouts**: id, user_id→users, activity_type_id→activity_types, date (ISO "YYYY-MM-DD"), notes (nullable), **duration (nullable, range code e.g. "45-60")**, **feeling_score (nullable, 1–5 self-rating)**, created_at
+- **health_metrics**: id, user_id→users, date (ISO), active_calories, resting_hr, sleep_hours, notes, created_at — all metrics nullable. Fed by `/api/watch-sync`. **Unique index on (user_id, date)**: one row per user per day, and the webhook upserts (`onConflictDoUpdate`) so a re-sent day overwrites instead of piling up rows. Duplicates here are silent — averages over identical rows look correct — so the constraint is the only thing that catches it.
 
-Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color). The duration/color columns are **already applied to the live DB** (and existing rows backfilled with default colors). New columns were generated with `npx drizzle-kit generate` (Windows) and applied via the web client (WSL).
+Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
+
+**Writing migrations:** `drizzle-kit generate` **does not run in WSL** (needs the Windows-native esbuild binary). `0003` and `0004` were therefore hand-written: the `.sql`, plus `meta/000N_snapshot.json` (copy the previous snapshot, set `prevId` to the old `id`, give it a fresh `id`, apply the diff) and an entry in `meta/_journal.json`. Apply them from WSL with `@libsql/client/web` — pure JS, works. Handy pattern for one-off DB checks/scripts (must run from the project root so `node_modules` resolves; `tsx` is broken in WSL for the same esbuild reason):
+
+```bash
+# ./tmp.mjs  →  node --env-file=.env ./tmp.mjs
+import { createClient } from "@libsql/client/web";
+const client = createClient({ url: process.env.DATABASE_URL, authToken: process.env.DATABASE_AUTH_TOKEN });
+console.log((await client.execute("PRAGMA index_list(health_metrics)")).rows);
+```
 
 ---
 
 ## 8. What's done vs. what's next
 
-### Done (this session, 9 commits — see `git log`)
-LF `.gitattributes`; Auth.js `trustHost` + seed default colors; middleware→proxy; duration & color columns + helpers; Cache Components/PPR + per-section Suspense; large month calendar + date picker + workout delete + duration + sonner toasts + wider layout; settings icon/color pickers + customizable colors.
+### Done (see `git log`)
+Core tracker (dashboard, month calendar, week nav, history, settings with icon/color pickers); Cache Components/PPR; duration, notes, edit workout; PWA icons + Serwist SW + goal confetti; login/register toasts + shared auth layout/card.
 
-### Not yet verified visually (built without a local GUI — eyeball on Windows)
-- Calendar month grid + per-day activity pills + current-week highlight.
-- Base UI **popover/select** positioning; **react-day-picker** styling; **toasts** (green/red); icon picker grid + color picker.
-- Delete-workout flow and that custom colors render on the dashboard.
+**AI Coach + Apple Watch (branch `feat/ai-coach-and-improvments`):**
+- `/ai-coach` exports the previous + current week as Markdown → paste into Gemini → paste its reply back to update `target_per_week`. Matching is **by activity name, case-insensitive**.
+- `workouts.feeling_score` (1–5 stars in the add/edit modal), surfaced in the export as a per-activity average.
+- `POST /api/watch-sync` — bearer-token webhook for Apple Shortcuts, upserts into `health_metrics`.
+
+### Verified for real (not just `tsc`)
+- Webhook: 401 on a bad token, 200 + `{"success":true}` on a good one, upsert proven by firing twice → 1 row, `id`/`created_at` unchanged. Repeat with `scripts/test-watch-sync.ps1`.
+- `parseAITargets` exercised against a raw JSON reply, a report-plus-fenced-block reply, a reply with a decoy code fence before the JSON, and garbage (throws).
+- Live DB schema confirmed by querying it directly.
 
 ### TODO / next steps
-1. **PWA**: real PNG icons (192/512 — only an SVG exists), configure `@serwist/next` service worker (installed, not wired).
-2. **Goal-completion animation** (confetti / celebratory state) — the last PRD feature missing.
-3. **Deploy to Vercel** (set `AUTH_URL`, env vars; rotate secrets).
-4. Optional: confirm `drizzle/` migration history matches the live DB; consider `git rm --cached .claude/settings.local.json` if local settings shouldn't be in the repo.
+1. **Deploy to Vercel** — set `AUTH_URL` **and `WATCH_SYNC_SECRET`** (without it the webhook 500s).
+2. **Apple Shortcuts** (needs the public URL): "Get contents of URL", POST, header `Authorization: Bearer <secret>`, JSON body `{ date, active_calories, resting_hr, sleep_hours, user_email }`. `date` must be ISO `YYYY-MM-DD`; `/ai-coach` only renders the current + previous week, so an out-of-range date saves but appears nowhere.
+3. **Still unverified by a human:** feeling-score stars (save + reload on edit), and the full Gemini round-trip. Health data so far is **mock** (620 kcal / 54 bpm / 7.5 h) from the test script.
+4. **Known gap:** if the AI renames an activity ("Siłownia" → "Gym"), `syncAITargets` **skips it silently** and still reports success. The prompt warns against it; the code doesn't report unmatched names. Fix = return skipped names from the action and show them in the UI.
+5. The AI's advice is only as good as the data — the export needs real logged workouts to be worth anything.
 
 ---
 

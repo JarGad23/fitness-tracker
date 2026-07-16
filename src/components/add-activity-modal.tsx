@@ -31,6 +31,7 @@ import {
   ChevronDown,
   StickyNote,
   Pencil,
+  Star,
   X,
 } from "lucide-react";
 import {
@@ -72,6 +73,7 @@ export function AddActivityModal({
   const [trackedDate, setTrackedDate] = useState(dateString);
   const [dateOpen, setDateOpen] = useState(false);
   const [duration, setDuration] = useState<string | null>(null);
+  const [feelingScore, setFeelingScore] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -93,6 +95,7 @@ export function AddActivityModal({
   const resetState = () => {
     setSelectedActivity(null);
     setDuration(null);
+    setFeelingScore(null);
     setNotes("");
     setEditingId(null);
   };
@@ -101,6 +104,7 @@ export function AddActivityModal({
     setEditingId(workout.id);
     setSelectedActivity(workout.activityTypeId);
     setDuration(workout.duration ?? null);
+    setFeelingScore(workout.feelingScore ?? null);
     setNotes(workout.notes ?? "");
     setExpandedId(null);
   };
@@ -115,7 +119,8 @@ export function AddActivityModal({
           editingId,
           selectedActivity,
           notes || undefined,
-          duration || undefined
+          duration || undefined,
+          feelingScore ?? undefined
         );
         toast.success("Zapisano zmiany");
       } else {
@@ -123,7 +128,8 @@ export function AddActivityModal({
           selectedActivity,
           toISODateString(selectedDate),
           notes || undefined,
-          duration || undefined
+          duration || undefined,
+          feelingScore ?? undefined
         );
         toast.success("Dodano aktywność");
       }
@@ -370,6 +376,43 @@ export function AddActivityModal({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              Samopoczucie (opcjonalnie)
+            </Label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((score) => {
+                const active = feelingScore !== null && score <= feelingScore;
+                return (
+                  <button
+                    key={score}
+                    type="button"
+                    onClick={() =>
+                      setFeelingScore(feelingScore === score ? null : score)
+                    }
+                    aria-label={`Samopoczucie ${score} z 5`}
+                    aria-pressed={active}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-input bg-card transition-colors hover:bg-muted"
+                  >
+                    <Star
+                      className={cn(
+                        "w-5 h-5 transition-colors",
+                        active
+                          ? "fill-yellow-400 text-yellow-400"
+                          : "text-muted-foreground"
+                      )}
+                    />
+                  </button>
+                );
+              })}
+              {feelingScore !== null && (
+                <span className="ml-1 text-sm text-muted-foreground">
+                  {feelingScore}/5
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

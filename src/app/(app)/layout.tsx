@@ -5,6 +5,7 @@ import {
   LogOut,
   Home,
   CalendarDays,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
@@ -26,6 +27,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <nav className="flex items-center gap-1">
+            <Link href="/ai-coach">
+              <Button
+                variant="ghost"
+                size="icon"
+                title="AI Coach"
+                className="rounded-xl h-10 w-10"
+              >
+                <Sparkles className="w-5 h-5" />
+              </Button>
+            </Link>
             <Link href="/historia">
               <Button
                 variant="ghost"
@@ -95,6 +106,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <CalendarDays className="w-5 h-5" />
                 Historia
+              </Button>
+            </Link>
+            <Link href="/ai-coach">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 h-12 rounded-xl text-base font-medium"
+              >
+                <Sparkles className="w-5 h-5" />
+                AI Coach
               </Button>
             </Link>
             <Link href="/ustawienia">
