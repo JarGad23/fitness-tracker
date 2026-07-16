@@ -21,7 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root ".env"
-$url = "$BaseUrl/api/watch-sync"
+$url = "$($BaseUrl.TrimEnd('/'))/api/watch-sync"
 
 function Get-StatusAndBody($scriptBlock) {
     try {
