@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     notes,
   } = (body ?? {}) as Record<string, unknown>;
 
-  if (typeof date !== "string" || typeof user_email !== "string") {
+  if (typeof date !== "string" || date.trim() === "" || typeof user_email !== "string") {
     return NextResponse.json(
       { error: "Missing required fields: date, user_email" },
       { status: 400 }
@@ -73,16 +73,31 @@ export async function POST(request: Request) {
     notes: typeof notes === "string" ? notes : null,
   };
 
+  // Only overwrite columns the payload actually carried. Shortcuts often syncs a
+  // partial payload (e.g. just calories one day, just resting HR another), and a
+  // plain `set: metrics` would write null over previously-good values for every
+  // field it omitted. Merge instead: update only the metrics that came in non-null.
+  const updateSet: Partial<typeof metrics> = {};
+  if (metrics.activeCalories != null) updateSet.activeCalories = metrics.activeCalories;
+  if (metrics.restingHr != null) updateSet.restingHr = metrics.restingHr;
+  if (metrics.sleepHours != null) updateSet.sleepHours = metrics.sleepHours;
+  if (metrics.notes != null) updateSet.notes = metrics.notes;
+
   // Shortcuts can re-send the same day (manual re-run, retry, a later sync with
-  // fuller data), so the latest payload for a day overwrites the previous one
-  // instead of piling up rows. id/createdAt stay as first written.
-  await db
+  // fuller data), so the latest payload for a day upserts onto the existing row
+  // instead of piling up rows. id/createdAt stay as first written. If the payload
+  // carried no metrics at all, keep the existing row untouched rather than error
+  // on an empty update.
+  const insert = db
     .insert(healthMetrics)
-    .values({ id: uuid(), userId: user.id, date, ...metrics })
-    .onConflictDoUpdate({
-      target: [healthMetrics.userId, healthMetrics.date],
-      set: metrics,
-    });
+    .values({ id: uuid(), userId: user.id, date, ...metrics });
+
+  await (Object.keys(updateSet).length > 0
+    ? insert.onConflictDoUpdate({
+        target: [healthMetrics.userId, healthMetrics.date],
+        set: updateSet,
+      })
+    : insert.onConflictDoNothing());
 
   // Not updateTag: that one throws outside a Server Action, and this is a route.
   revalidateTag("health-metrics", "max");
