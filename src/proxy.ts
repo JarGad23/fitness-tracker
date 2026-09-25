@@ -22,5 +22,7 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icons).*)"],
+  // Public assets must bypass the login redirect. sw.js in particular: browsers
+  // reject a service worker script served through a redirect.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons).*)"],
 };
