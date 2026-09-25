@@ -156,6 +156,27 @@ def build(args, secret):
                          WFContentItemSortOrder="Oldest First", WFContentItemLimitEnabled=False),
         b.sleep_line)
 
+    # Workout-only signals, one value per day. Type names come from a shortcut built
+    # in the Shortcuts app ("Typy"), not guessed.
+    # A type with no samples at all in the window makes Shortcuts show a blocking
+    # "no samples found" alert, which would stall the background automation — so only
+    # request signals the user actually records (--signals).
+    def per_day(type_name, unit=None, **extra):
+        options = {"WFHKSampleFilteringGroupBy": "Day", **extra}
+        if unit:
+            options["WFHKSampleFilteringUnit"] = unit
+        return b.each(b.health_samples(type_name, args.days, **options), b.daily_line)
+
+    exercise = per_day("Exercise Time", "min")
+    signals = {}
+    if "cycling" in args.signals:
+        signals["cycling_km"] = per_day("Cycling Distance", "km")
+    if "swimming" in args.signals:
+        signals["swimming_m"] = per_day("Swimming Distance", "m")
+    if "running" in args.signals:
+        # Unit left to Health's default; fill missing days so an empty week isn't "no samples".
+        signals["running_speed"] = per_day("Running Speed", WFHKSampleFilteringFillMissing=True)
+
     def field(key, value, item_type=0):  # item_type: 0 text, 3 number
         return {"WFKey": b.text(key), "WFItemType": item_type, "WFValue": value}
 
@@ -171,6 +192,8 @@ def build(args, secret):
             field("active_calories", b.text(b.output(calories, REPEAT_RESULTS))),
             field("resting_hr", b.text(b.output(resting_hr, REPEAT_RESULTS))),
             field("sleep", b.text(b.output(sleep, REPEAT_RESULTS))),
+            field("exercise_minutes", b.text(b.output(exercise, REPEAT_RESULTS))),
+            *(field(key, b.text(b.output(uid, REPEAT_RESULTS))) for key, uid in signals.items()),
         ]}, "WFSerializationType": "WFDictionaryFieldValue"},
     })
     if args.show_result:
@@ -198,6 +221,8 @@ def main():
     p.add_argument("--url", default=PROD_URL)
     p.add_argument("--days", type=int, default=7, help="window for calories + resting HR")
     p.add_argument("--sleep-days", type=int, default=7, help="window for raw sleep samples (keep small)")
+    p.add_argument("--signals", type=lambda v: set(v.split(",")), default={"cycling", "running"},
+                   help="workout signals to request: cycling,running,swimming (default: cycling,running)")
     p.add_argument("--hr-source", help='only resting HR from this source, e.g. "Apple Watch (Name)"')
     p.add_argument("--name", default="Watch Sync v2", help="shortcut name (= output file name)")
     p.add_argument("--show-result", action="store_true", help="show the server response (manual runs)")

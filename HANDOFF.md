@@ -88,7 +88,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
-| Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one: `--email <account> --hr-source "Apple Watch (Jarosław)"` |
+| Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
 | Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
 | DB schema | `src/lib/db/schema.ts` |
