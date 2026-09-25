@@ -32,3 +32,7 @@ wasn't worn. Shortcuts cannot read workouts directly.
   v1 sleep 0 → null), user deleted afterwards.
 - Found on the way: `npm run dev` fails (Serwist webpack config vs default Turbopack) → Phase 0.
 - Shortcut generator lives in the session scratchpad (built from the exported originals).
+- Production live (bcf4083, 0f1c156). Backfill: 90 days of calories + resting HR, 14 nights
+  of sleep → 91 days in DB (27.06–25.09), zero morning-only calories left. 55 days have no
+  sleep (older than the 14-day sleep window and never sent by v1). 90-day sleep loop hung
+  the phone — see lessons.md.

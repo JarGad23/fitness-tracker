@@ -27,3 +27,7 @@
 ### Shortcut .wflow parameters don't mean what they look like
 **Avoid:** Reading a Shortcuts plist and trusting its apparent meaning. `Start Date, Operator 1002, Number 7, Unit 16` looks like "last 7 days" but is "is today" — the number is ignored. The v1 shortcut shipped with it and only ever sent morning calories; days of trial and error never caught it because nothing showed what the phone actually sent.
 **Better:** Make the phone's output observable first: `?dry=1` on the webhook plus `WATCH_SYNC_DEBUG=1` on a local `next start` reachable over LAN, then read the raw payload from the server log. Change the shortcut only after seeing real data. Known codes: `1001` + `Unit 16` = last N days, `1002` = today.
+
+### Shortcuts loops don't scale linearly
+**Avoid:** Scaling a shortcut's window from a measured small run (7 days of sleep ≈ 200 samples, 3 s) to 90 days (≈ 2700 samples) assuming linear time. The 90-day backfill hung on the phone for 15+ minutes and never sent anything.
+**Better:** Keep per-sample loops small (raw sleep ≤ ~14 days). For long history use day-grouped quantities (one iteration per day). Grow windows in steps and time each run.
