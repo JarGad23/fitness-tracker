@@ -25,6 +25,9 @@ export const activityTypes = sqliteTable("activity_types", {
   targetPerWeek: integer("target_per_week").notNull(),
   icon: text("icon").notNull(),
   color: text("color"), // hex, e.g. "#22c55e"
+  // Which Apple Watch signal auto-logs this activity: "cycling" | "swimming" |
+  // "running", or null for activities the watch can't detect (e.g. gym).
+  healthKind: text("health_kind"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
@@ -43,6 +46,8 @@ export const workouts = sqliteTable("workouts", {
   notes: text("notes"),
   duration: text("duration"), // optional range code e.g. "45-60"
   feelingScore: integer("feeling_score"), // optional 1-5 self-rating
+  // "manual" (logged in the app) | "watch" (auto-created from Apple Health data)
+  source: text("source").notNull().default("manual"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -62,6 +67,12 @@ export const healthMetrics = sqliteTable(
     activeCalories: integer("active_calories"),
     restingHr: integer("resting_hr"),
     sleepHours: real("sleep_hours"),
+    exerciseMinutes: integer("exercise_minutes"),
+    // Workout-only signals: the watch records these only during a workout, so a
+    // value on a day means that workout happened (see src/lib/health-sync.ts).
+    cyclingKm: real("cycling_km"),
+    swimmingM: integer("swimming_m"),
+    runningSpeedKmh: real("running_speed_kmh"),
     notes: text("notes"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()

@@ -10,10 +10,10 @@ import { v4 as uuid } from "uuid";
 import { AuthError } from "next-auth";
 
 const DEFAULT_ACTIVITIES = [
-  { name: "Siłownia", targetPerWeek: 4, icon: "Dumbbell", sortOrder: 0, color: "#eab308" },
-  { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1, color: "#f97316" },
-  { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2, color: "#22c55e" },
-  { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3, color: "#3b82f6" },
+  { name: "Siłownia", targetPerWeek: 4, icon: "Dumbbell", sortOrder: 0, color: "#eab308", healthKind: null },
+  { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1, color: "#f97316", healthKind: "running" },
+  { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2, color: "#22c55e", healthKind: "cycling" },
+  { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3, color: "#3b82f6", healthKind: "swimming" },
 ];
 
 export async function register(formData: FormData) {

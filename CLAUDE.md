@@ -42,7 +42,7 @@ Basen     → niebieski (blue-500)
 ## Baza Danych
 
 - **Turso** (SQLite edge) - credentials w `.env`
-- Migracje: `npm run db:generate` + `npm run db:migrate` — **najpierw** przeczytaj HANDOFF.md §7 (baza nie ma jeszcze tabeli `__drizzle_migrations`)
+- Migracje: `npm run db:generate` → przejrzyj SQL → `npm run db:migrate`
 - Schema: `src/lib/db/schema.ts`
 
 ## Stack

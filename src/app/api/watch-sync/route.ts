@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
-import { users, healthMetrics } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { users, healthMetrics, activityTypes, workouts } from "@/lib/db/schema";
+import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { revalidateTag } from "next/cache";
-import { parseHealthPayload, type DayMetrics } from "@/lib/health-sync";
+import {
+  detectWorkouts,
+  parseHealthPayload,
+  type DayMetrics,
+  type HealthKind,
+} from "@/lib/health-sync";
 
 // Called from Apple Shortcuts (no NextAuth session), so it is protected by a
 // static bearer token in the WATCH_SYNC_SECRET env var. Runs on the default
@@ -17,7 +22,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Shortcuts re-sends days (the v2 shortcut sends a whole week every run), so a day
 // upserts onto its (user_id, date) row. Only non-null metrics overwrite: a partial
 // payload must not erase values stored earlier. id/createdAt stay as first written.
-function upsertDay(userId: string, day: DayMetrics & { notes?: string | null }) {
+type DayUpsert = { date: string } & Partial<Omit<DayMetrics, "date">> & {
+  notes?: string | null;
+};
+
+function upsertDay(userId: string, day: DayUpsert) {
   const { date, ...metrics } = day;
   const updateSet = Object.fromEntries(
     Object.entries(metrics).filter(([, v]) => v != null)
@@ -32,6 +41,48 @@ function upsertDay(userId: string, day: DayMetrics & { notes?: string | null }) 
         set: updateSet,
       })
     : insert.onConflictDoNothing();
+}
+
+// Watch-detected workouts to create for these days. Must run BEFORE the metrics
+// upsert: detection compares against the values stored so far. Skips kinds the
+// user has no activity for, and days that already have a workout of that activity
+// (logged by hand, or created by an earlier sync).
+async function planWatchWorkouts(userId: string, days: DayMetrics[]) {
+  if (days.length === 0) return [];
+  const from = days[0].date;
+  const to = days[days.length - 1].date;
+
+  const previousRows = await db.query.healthMetrics.findMany({
+    where: and(
+      eq(healthMetrics.userId, userId),
+      gte(healthMetrics.date, from),
+      lte(healthMetrics.date, to)
+    ),
+  });
+  const detected = detectWorkouts(days, new Map(previousRows.map((r) => [r.date, r])));
+  if (detected.length === 0) return [];
+
+  const linked = await db.query.activityTypes.findMany({
+    where: and(eq(activityTypes.userId, userId), isNotNull(activityTypes.healthKind)),
+  });
+  const byKind = new Map(linked.map((t) => [t.healthKind as HealthKind, t]));
+
+  const existing = await db.query.workouts.findMany({
+    where: and(
+      eq(workouts.userId, userId),
+      gte(workouts.date, from),
+      lte(workouts.date, to),
+      inArray(workouts.activityTypeId, linked.map((t) => t.id))
+    ),
+  });
+  const taken = new Set(existing.map((w) => `${w.date}|${w.activityTypeId}`));
+
+  return detected.flatMap((d) => {
+    const type = byKind.get(d.kind);
+    if (!type || taken.has(`${d.date}|${type.id}`)) return [];
+    taken.add(`${d.date}|${type.id}`);
+    return [{ date: d.date, activityTypeId: type.id, activity: type.name, note: d.note }];
+  });
 }
 
 function tokenMatches(provided: string, expected: string): boolean {
@@ -89,17 +140,32 @@ export async function POST(request: Request) {
         ? payload.today
         : new Date().toISOString().slice(0, 10);
     const parsed = parseHealthPayload(payload, today);
+    const created = await planWatchWorkouts(user.id, parsed.days);
 
     if (!dryRun && parsed.days.length > 0) {
-      const [first, ...rest] = parsed.days.map((day) => upsertDay(user.id, day));
+      const [first, ...rest] = [
+        ...parsed.days.map((day) => upsertDay(user.id, day)),
+        ...created.map((w) =>
+          db.insert(workouts).values({
+            id: uuid(),
+            userId: user.id,
+            activityTypeId: w.activityTypeId,
+            date: w.date,
+            notes: w.note,
+            source: "watch",
+          })
+        ),
+      ];
       await db.batch([first, ...rest]);
       revalidateTag("health-metrics", "max");
+      if (created.length > 0) revalidateTag("workouts", "max");
     }
 
     return NextResponse.json({
       success: true,
       dryRun,
       saved: parsed.days,
+      workouts: created.map(({ date, activity, note }) => ({ date, activity, note })),
       sleepLabels: parsed.sleepLabels,
       ignoredLines: parsed.ignoredLines,
     });

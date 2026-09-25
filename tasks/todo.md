@@ -21,6 +21,16 @@ wasn't worn. Shortcuts cannot read workouts directly.
 
 ## Later
 - [ ] Workout detection from workout-only samples (cycling/swimming distance, running speed)
+  - [x] Backup DB → `.backups/db-2026-09-25.json` (gitignored)
+  - [x] Baseline `__drizzle_migrations` (5 rows, sha256 + journal `when`); `db:migrate` = no-op
+  - [x] Migration 0005: health_metrics exercise/cycling/swimming/running columns,
+        `workouts.source`, `activity_types.health_kind` (set from names) — applied
+  - [x] `detectWorkouts`: create a workout only when a day's signal first crosses its
+        threshold; skip days that already have that activity; deleted ones never return
+  - [x] E2E on a throwaway user: dry run, create, manual blocks duplicate, resend = no-op,
+        deleted stays deleted
+  - [ ] Exact Health type names (Jarek exports a "Typy" shortcut) → generator
+  - [ ] Deploy, new shortcut, 90-day backfill, check calendar
 - [x] Phase 0 cleanup: `turbopack: {}` fixes `npm run dev`; WSL/Windows rules removed from CLAUDE.md / HANDOFF.md / lessons.md; obsolete `scripts/test-watch-sync.ps1` and `scripts/migrate.ts` deleted; `__drizzle_migrations` baseline documented as a prerequisite for the next migration
 
 ## Review

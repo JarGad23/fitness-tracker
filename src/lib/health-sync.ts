@@ -6,6 +6,10 @@
 //   active_calories  "2026-09-24;512.3"                              (grouped by day)
 //   resting_hr       "2026-09-24;54"                                 (raw samples)
 //   sleep            "2026-09-23T23:10:00;2026-09-24T06:40:00;Core"  (raw samples)
+//   exercise_minutes "2026-09-24;42"                                 (grouped by day)
+//   cycling_km       "2026-09-24;18.2"                               (grouped by day)
+//   swimming_m       "2026-09-24;1250"                               (grouped by day)
+//   running_speed    "2026-09-24;10.4"  km/h                         (grouped by day)
 // Shortcuts formats numbers with the phone's locale, so values may use a decimal
 // comma and space/nbsp thousand separators ("1 234,5").
 
@@ -14,7 +18,15 @@ export type DayMetrics = {
   activeCalories: number | null;
   restingHr: number | null;
   sleepHours: number | null;
+  exerciseMinutes: number | null;
+  cyclingKm: number | null;
+  swimmingM: number | null;
+  runningSpeedKmh: number | null;
 };
+
+export type HealthKind = "cycling" | "swimming" | "running";
+
+export type DetectedWorkout = { date: string; kind: HealthKind; note: string };
 
 export type SleepLabelStat = { label: string; samples: number; counted: boolean };
 
@@ -144,6 +156,10 @@ export function parseHealthPayload(
   const calories = parseDaily(body.active_calories, ignoredLines);
   const restingHr = parseDaily(body.resting_hr, ignoredLines);
   const sleep = parseSleep(body.sleep, ignoredLines);
+  const exercise = parseDaily(body.exercise_minutes, ignoredLines);
+  const cycling = parseDaily(body.cycling_km, ignoredLines);
+  const swimming = parseDaily(body.swimming_m, ignoredLines);
+  const running = parseDaily(body.running_speed, ignoredLines);
 
   const todayMs = Date.parse(`${today}T00:00:00Z`);
   const oldest = wallClockDate(todayMs - MAX_AGE_DAYS * 86_400_000);
@@ -152,25 +168,77 @@ export function parseHealthPayload(
     ...calories.keys(),
     ...restingHr.keys(),
     ...sleep.hoursByDay.keys(),
+    ...exercise.keys(),
+    ...cycling.keys(),
+    ...swimming.keys(),
+    ...running.keys(),
   ]);
 
   // Non-positive values mean "no data" (e.g. a night without the watch), not zero.
   const positive = (n: number | undefined) => (n != null && n > 0 ? n : null);
+  const round = (n: number | null, digits = 0) =>
+    n != null ? Math.round(n * 10 ** digits) / 10 ** digits : null;
 
   const days = [...dates]
     .filter((d) => d <= today && d >= oldest)
     .sort()
     .map((date) => {
-      const kcal = positive(calories.get(date));
-      const hr = positive(restingHr.get(date));
-      const sleepH = positive(sleep.hoursByDay.get(date));
       return {
         date,
-        activeCalories: kcal != null ? Math.round(kcal) : null,
-        restingHr: hr != null ? Math.round(hr) : null,
-        sleepHours: sleepH != null ? Math.round(sleepH * 100) / 100 : null,
+        activeCalories: round(positive(calories.get(date))),
+        restingHr: round(positive(restingHr.get(date))),
+        sleepHours: round(positive(sleep.hoursByDay.get(date)), 2),
+        exerciseMinutes: round(positive(exercise.get(date))),
+        cyclingKm: round(positive(cycling.get(date)), 1),
+        swimmingM: round(positive(swimming.get(date))),
+        runningSpeedKmh: round(positive(running.get(date)), 1),
       };
     });
 
   return { days, sleepLabels: sleep.labels, ignoredLines };
+}
+
+// Below these a value is noise (GPS drift, a few pool lengths), not a workout.
+const MIN_CYCLING_KM = 0.5;
+const MIN_SWIMMING_M = 50;
+
+const pl = (n: number, digits = 0) =>
+  n.toLocaleString("pl-PL", { maximumFractionDigits: digits });
+
+type WorkoutSignals = Pick<DayMetrics, "cyclingKm" | "swimmingM" | "runningSpeedKmh">;
+
+const SIGNALS: {
+  kind: HealthKind;
+  value: (d: Partial<WorkoutSignals>) => number | null | undefined;
+  min: number;
+  note: (n: number) => string;
+}[] = [
+  { kind: "cycling", value: (d) => d.cyclingKm, min: MIN_CYCLING_KM, note: (n) => `${pl(n, 1)} km` },
+  { kind: "swimming", value: (d) => d.swimmingM, min: MIN_SWIMMING_M, note: (n) => `${pl(n)} m` },
+  { kind: "running", value: (d) => d.runningSpeedKmh, min: 0, note: (n) => `śr. ${pl(n, 1)} km/h` },
+];
+
+/**
+ * Workouts implied by workout-only signals. A workout is reported only when a
+ * day's signal first crosses its threshold (`previous` did not): the shortcut
+ * re-sends the whole week every run, and a workout the user deleted must not come
+ * back on the next sync. Comparing against the threshold (not just null) handles a
+ * partial morning value that grows into a real workout later that day.
+ */
+export function detectWorkouts(
+  days: DayMetrics[],
+  previous: Map<string, Partial<WorkoutSignals>>
+): DetectedWorkout[] {
+  const qualifies = (n: number | null | undefined, min: number) => n != null && n > 0 && n >= min;
+  const detected: DetectedWorkout[] = [];
+  for (const day of days) {
+    const before = previous.get(day.date) ?? {};
+    for (const signal of SIGNALS) {
+      const now = signal.value(day);
+      if (qualifies(now, signal.min) && !qualifies(signal.value(before), signal.min)) {
+        detected.push({ date: day.date, kind: signal.kind, note: `Apple Watch · ${signal.note(now!)}` });
+      }
+    }
+  }
+  return detected;
 }

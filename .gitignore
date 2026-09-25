@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Generated Apple Shortcuts (contain the WATCH_SYNC_SECRET bearer token)
 scripts/shortcuts/out/
+
+# Local DB dumps (contain personal data)
+.backups/
