@@ -34,8 +34,9 @@ const NOT_ASLEEP = ["awake", "czuwanie", "in bed", "inbed", "w łóżku"];
 // (from 18:00) are the start of the next night, so shift by 6h before taking the date.
 const SLEEP_DAY_SHIFT_MS = 6 * 60 * 60 * 1000;
 
-// Anything beyond this is not a plausible re-send window; ignore it.
-const MAX_AGE_DAYS = 31;
+// The daily shortcut sends 7 days; a one-off backfill shortcut can send months of
+// history. Anything older than a year is treated as junk.
+const MAX_AGE_DAYS = 366;
 
 export function parseLocaleNumber(raw: string): number | null {
   const cleaned = raw.replace(/[\s  ]/g, "").replace(",", ".");
