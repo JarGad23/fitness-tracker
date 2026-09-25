@@ -47,3 +47,6 @@ public/swe-worker-*.js
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated Apple Shortcuts (contain the WATCH_SYNC_SECRET bearer token)
+scripts/shortcuts/out/
