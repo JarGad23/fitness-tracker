@@ -17,10 +17,10 @@ wasn't worn. Shortcuts cannot read workouts directly.
 - [x] Generate "Watch Sync v2" from real action structures of the existing shortcuts
 - [x] Sign with `shortcuts sign`, import on Mac → syncs to iPhone
 - [x] Jarek runs it manually on iPhone, pastes the response
-- [ ] Switch automation to v2 once the numbers match the Health app
+- [x] Switch automation (now to v3)
 
 ## Later
-- [ ] Workout detection from workout-only samples (cycling/swimming distance, running speed)
+- [x] Workout detection from workout-only samples (cycling/swimming distance, running speed)
   - [x] Backup DB → `.backups/db-2026-09-25.json` (gitignored)
   - [x] Baseline `__drizzle_migrations` (5 rows, sha256 + journal `when`); `db:migrate` = no-op
   - [x] Migration 0005: health_metrics exercise/cycling/swimming/running columns,
@@ -33,7 +33,7 @@ wasn't worn. Shortcuts cannot read workouts directly.
         Cycling Distance, Swimming Distance, Running Speed, Running Power, Exercise Time
   - [x] Swimming dropped from the daily shortcut (never recorded → blocking alert)
   - [x] Deployed; backfill (90 days, cycling only): 26 rides created, 4 manual untouched
-  - [ ] Jarek: import "Watch Sync v3", point the 11:00 automation at it, delete old shortcuts
+  - [x] "Watch Sync v3" live in the 11:00 automation; first run verified in the DB
 - [x] Phase 0 cleanup: `turbopack: {}` fixes `npm run dev`; WSL/Windows rules removed from CLAUDE.md / HANDOFF.md / lessons.md; obsolete `scripts/test-watch-sync.ps1` and `scripts/migrate.ts` deleted; `__drizzle_migrations` baseline documented as a prerequisite for the next migration
 
 ## Review
