@@ -88,7 +88,8 @@ The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Wind
 | AI Coach export/import (pure fns) | `src/lib/ai-sync.ts` (`buildCoachMarkdown`, `parseAITargets`) |
 | AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
-| Webhook test script (Windows) | `scripts/test-watch-sync.ps1` |
+| Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
+| Webhook test script (Windows, v1 payload) | `scripts/test-watch-sync.ps1` |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
 | Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
 | DB schema | `src/lib/db/schema.ts` |
@@ -134,7 +135,9 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 
 ### TODO / next steps
 1. **Deploy to Vercel** — set `AUTH_URL` **and `WATCH_SYNC_SECRET`** (without it the webhook 500s).
-2. **Apple Shortcuts** (needs the public URL): "Get contents of URL", POST, header `Authorization: Bearer <secret>`, JSON body `{ date, active_calories, resting_hr, sleep_hours, user_email }`. `date` must be ISO `YYYY-MM-DD`; `/ai-coach` only renders the current + previous week, so an out-of-range date saves but appears nowhere.
+2. **Apple Shortcuts — "Watch Sync v2"** (2026-09-25, verified against the Health app on real data). The shortcut does no math: it sends the last 7 days as text lines and the server aggregates (`src/lib/health-sync.ts`). Payload: `{ version: 2, user_email, today, active_calories: "YYYY-MM-DD;kcal\n…" (grouped by day), resting_hr: "YYYY-MM-DD;bpm\n…" (raw, averaged per day), sleep: "start;end;stage\n…" (raw, overlapping intervals merged, "Czuwanie"/"W łóżku" skipped, night assigned to wake-up day) }`. Every run re-sends the week, so missed runs self-heal and today's partial values get overwritten next day. `?dry=1` parses without writing; `WATCH_SYNC_DEBUG=1` logs the raw payload. The v1 single-day payload `{ date, active_calories, resting_hr, sleep_hours, user_email }` still works; non-positive values are stored as null.
+   - **Shortcuts date-filter gotcha:** in the `.wflow` plist, `Start Date` operator `1002` means **"is today"** (the Number is ignored) and `1001` + `Unit 16` means **"in the last N days"**. The v1 shortcut used `1002` believing it was "last 7 days" — that's why it only ever sent morning calories.
+   - Shortcuts **cannot read workouts**. Workout detection will have to come from workout-only samples (cycling/swimming distance, running speed) or Health Auto Export.
 3. **Still unverified by a human:** feeling-score stars (save + reload on edit), and the full Gemini round-trip. Health data so far is **mock** (620 kcal / 54 bpm / 7.5 h) from the test script.
 4. **Known gap:** if the AI renames an activity ("Siłownia" → "Gym"), `syncAITargets` **skips it silently** and still reports success. The prompt warns against it; the code doesn't report unmatched names. Fix = return skipped names from the action and show them in the UI.
 5. The AI's advice is only as good as the data — the export needs real logged workouts to be worth anything.

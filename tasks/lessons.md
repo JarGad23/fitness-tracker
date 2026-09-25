@@ -23,3 +23,7 @@
 ### Windows PowerShell 5.1 mangles pasted multi-line commands
 **Avoid:** Giving the user long one-liner `curl.exe` / `Invoke-RestMethod` commands. PS 5.1 pastes line-by-line and breaks the string mid-quote (shows `>>`). A newline inside an `Authorization` header makes Node reject the request with a bare `400 Bad Request` + `Connection: close` and no body — which looks exactly like an app bug and wastes a debugging cycle.
 **Better:** Ship a `.ps1` script in `scripts/` and give one short line to run it: `powershell -ExecutionPolicy Bypass -File scripts\name.ps1`. Have the script read secrets from `.env` itself so it can't drift from the server. Tell-tale: a 4xx/5xx with NO JSON body did not come from our route.
+
+### Shortcut .wflow parameters don't mean what they look like
+**Avoid:** Reading a Shortcuts plist and trusting its apparent meaning. `Start Date, Operator 1002, Number 7, Unit 16` looks like "last 7 days" but is "is today" — the number is ignored. The v1 shortcut shipped with it and only ever sent morning calories; days of trial and error never caught it because nothing showed what the phone actually sent.
+**Better:** Make the phone's output observable first: `?dry=1` on the webhook plus `WATCH_SYNC_DEBUG=1` on a local `next start` reachable over LAN, then read the raw payload from the server log. Change the shortcut only after seeing real data. Known codes: `1001` + `Unit 16` = last N days, `1002` = today.
