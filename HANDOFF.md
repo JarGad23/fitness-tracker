@@ -1,7 +1,7 @@
 # Fitness Tracker — Handoff / Project Status
 
 > Single source of truth for picking up this project. Read this top-to-bottom before changing anything.
-> **Last updated:** 2026-06-17 (Claude Opus 4.8)
+> **Last updated:** 2026-09-25 — moved from Windows/WSL to macOS; Watch Sync v2
 
 ---
 
@@ -12,7 +12,7 @@ Personal fitness app: a **weekly pool** of training goals. The user logs any act
 - **Owner:** Jarek (jaroslaw.gad.krypto@gmail.com — git author)
 - **UI language:** Polish (all user-facing text). Code/docs in English.
 - **Week:** Monday–Sunday (`weekStartsOn: 1` in date-fns, `pl` locale).
-- **Status:** Feature-rich beyond MVP. Builds clean on Windows, lint + typecheck clean. See §8 for what's left.
+- **Status:** Feature-rich beyond MVP. Builds clean on macOS, lint + typecheck clean. See §8 for what's left.
 
 ---
 
@@ -22,17 +22,16 @@ Next.js 16.2.x (App Router, **Cache Components / PPR enabled**), React 19, Tailw
 
 ---
 
-## 3. ⚠️ Environment — READ FIRST (this is the #1 source of pain)
+## 3. Environment
 
-The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Windows and WSL**. `node_modules` is shared.
+Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows/WSL constraints (shared `node_modules`, no builds from WSL, pure-JS-only tooling) are **gone** — everything runs natively: `npm run dev`, `npm run build`, `tsx`, `drizzle-kit`.
 
-- **NEVER run `npm install` from WSL.** Native binaries are platform-gated; an install in WSL prunes the Windows binaries (`@next/swc-win32`, `lightningcss-win32`, `@tailwindcss/oxide-win32`) and breaks the user's `npm run build`. (It already happened once.) The reverse is also true.
-- **NEVER run `next build` / `next dev` from WSL.** It writes a Linux-owned `.next/`, which then fails on Windows with `EPERM: unlink ...`. If it happens, delete `.next` and rebuild on Windows.
-- **The user builds & runs on Windows** (`npm run build && npm start`, or `npm run dev`).
-- **From WSL, verify with pure-JS tools only:** `npm run lint` (ESLint) and `npx tsc --noEmit` (typecheck). Both work without native binaries and catch most issues (including bad Base UI / react-day-picker API usage and missing lucide icon names).
-- **DB migrations from WSL:** use the fetch-based client `@libsql/client/web` (no native binary). Example pattern used this session: read `.env`, `createClient({url, authToken})`, run `ALTER TABLE ...`. The native `@libsql/client` will NOT load in WSL.
-- `.gitattributes` (`* text=auto eol=lf`) is committed — keeps line endings LF on both OSes. Without it, Windows CRLF makes every file look fully rewritten.
-- `next start` serves the last `next build`; source changes need a rebuild to show up (not a bug).
+- `npm run dev` → Turbopack. `next.config.ts` has `turbopack: {}` because the Serwist wrapper adds a webpack config and Next 16 otherwise refuses to start dev. Serwist is disabled in dev.
+- `npm run build` → **`next build --webpack` on purpose**: Serwist injects the service worker (`public/sw.js`) through a webpack plugin; Turbopack builds skip it and the PWA silently loses its SW. Moving to `@serwist/turbopack` would lift this.
+- npm 11 blocks dependency install scripts by default (`npm install-scripts ls`). Nothing in this project needs them so far.
+- `.gitattributes` (`* text=auto eol=lf`) keeps line endings LF.
+- `next start` serves the last `next build`; source changes need a rebuild.
+- Testing the webhook against the real DB: prefer `?dry=1`; for real writes use a throwaway user and delete it afterwards (all tables cascade from `users`).
 
 ---
 
@@ -89,7 +88,6 @@ The repo lives on a **Windows path** (`/mnt/c/...`) and is used from **both Wind
 | AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
-| Webhook test script (Windows, v1 payload) | `scripts/test-watch-sync.ps1` |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
 | Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
 | DB schema | `src/lib/db/schema.ts` |
@@ -107,7 +105,9 @@ Turso (libSQL). Four tables.
 
 Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
 
-**Writing migrations:** `drizzle-kit generate` **does not run in WSL** (needs the Windows-native esbuild binary). `0003` and `0004` were therefore hand-written: the `.sql`, plus `meta/000N_snapshot.json` (copy the previous snapshot, set `prevId` to the old `id`, give it a fresh `id`, apply the diff) and an entry in `meta/_journal.json`. Apply them from WSL with `@libsql/client/web` — pure JS, works. Handy pattern for one-off DB checks/scripts (must run from the project root so `node_modules` resolves; `tsx` is broken in WSL for the same esbuild reason):
+**⚠️ Before the next migration:** every migration so far was applied by hand, so the live DB has **no `__drizzle_migrations` table**. `npm run db:migrate` would try to replay `0000`–`0004` and fail on "table already exists". First baseline it: create `__drizzle_migrations` (`id`, `hash`, `created_at`) and insert one row per journal entry (`hash` = sha256 of the `.sql` file, `created_at` = the journal's `when`), then `drizzle-kit generate` + `db:migrate` work normally. (`0003`/`0004` were hand-written back when `drizzle-kit` could not run in WSL; on macOS it works — `npx drizzle-kit check` is clean.)
+
+Handy pattern for one-off DB checks (run from the project root so `node_modules` resolves):
 
 ```bash
 # ./tmp.mjs  →  node --env-file=.env ./tmp.mjs
@@ -129,7 +129,7 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - `POST /api/watch-sync` — bearer-token webhook for Apple Shortcuts, upserts into `health_metrics`.
 
 ### Verified for real (not just `tsc`)
-- Webhook: 401 on a bad token, 200 + `{"success":true}` on a good one, upsert proven by firing twice → 1 row, `id`/`created_at` unchanged. Repeat with `scripts/test-watch-sync.ps1`.
+- Webhook: 401 on a bad token, 200 + `{"success":true}` on a good one, upsert proven by firing twice → 1 row, `id`/`created_at` unchanged. Now repeatable with `curl` + `?dry=1` (no DB write).
 - `parseAITargets` exercised against a raw JSON reply, a report-plus-fenced-block reply, a reply with a decoy code fence before the JSON, and garbage (throws).
 - Live DB schema confirmed by querying it directly.
 
@@ -145,6 +145,6 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 ---
 
 ## 9. Working agreement (user preferences)
-- Don't run build/lint/tests after every edit; the user verifies on Windows. (Lint/tsc from WSL only when useful.)
+- Verification scales with risk (see the global CLAUDE.md table); UI changes get a look in the browser.
 - No emojis in UI. Plain, normal CSS where improvements are needed.
 - Token-efficient, direct action. Plan non-trivial work before building.

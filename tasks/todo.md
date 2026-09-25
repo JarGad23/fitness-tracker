@@ -21,7 +21,7 @@ wasn't worn. Shortcuts cannot read workouts directly.
 
 ## Later
 - [ ] Workout detection from workout-only samples (cycling/swimming distance, running speed)
-- [ ] Phase 0 cleanup: stale WSL rules in CLAUDE.md / HANDOFF.md / lessons.md
+- [x] Phase 0 cleanup: `turbopack: {}` fixes `npm run dev`; WSL/Windows rules removed from CLAUDE.md / HANDOFF.md / lessons.md; obsolete `scripts/test-watch-sync.ps1` and `scripts/migrate.ts` deleted; `__drizzle_migrations` baseline documented as a prerequisite for the next migration
 
 ## Review
 - Old shortcut bug found: date filter operator 1002 = "is today", not "last 7 days" → only
