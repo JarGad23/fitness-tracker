@@ -29,8 +29,11 @@ wasn't worn. Shortcuts cannot read workouts directly.
         threshold; skip days that already have that activity; deleted ones never return
   - [x] E2E on a throwaway user: dry run, create, manual blocks duplicate, resend = no-op,
         deleted stays deleted
-  - [ ] Exact Health type names (Jarek exports a "Typy" shortcut) → generator
-  - [ ] Deploy, new shortcut, 90-day backfill, check calendar
+  - [x] Exact Health type names from a "Typy" shortcut built on the phone:
+        Cycling Distance, Swimming Distance, Running Speed, Running Power, Exercise Time
+  - [x] Swimming dropped from the daily shortcut (never recorded → blocking alert)
+  - [x] Deployed; backfill (90 days, cycling only): 26 rides created, 4 manual untouched
+  - [ ] Jarek: import "Watch Sync v3", point the 11:00 automation at it, delete old shortcuts
 - [x] Phase 0 cleanup: `turbopack: {}` fixes `npm run dev`; WSL/Windows rules removed from CLAUDE.md / HANDOFF.md / lessons.md; obsolete `scripts/test-watch-sync.ps1` and `scripts/migrate.ts` deleted; `__drizzle_migrations` baseline documented as a prerequisite for the next migration
 
 ## Review
