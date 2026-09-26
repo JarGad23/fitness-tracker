@@ -1,7 +1,7 @@
 # Fitness Tracker — Handoff / Project Status
 
 > Single source of truth for picking up this project. Read this top-to-bottom before changing anything.
-> **Last updated:** 2026-09-25 — moved from Windows/WSL to macOS; Watch Sync v2
+> **Last updated:** 2026-09-26 — gym phase (sets logging, watch "was this the gym?" prompt)
 
 ---
 
@@ -91,20 +91,26 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
 | Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
+| Gym: workout page (sets editor) | `src/app/(app)/trening/[id]/page.tsx`, `src/components/workout-sets.tsx` |
+| Gym: exercise history | `src/app/(app)/cwiczenie/[id]/page.tsx` |
+| Gym: actions / helpers / dashboard prompt | `src/actions/gym.ts`, `src/lib/gym.ts`, `src/components/gym-prompts.tsx` |
 | DB schema | `src/lib/db/schema.ts` |
 
 ---
 
 ## 7. Database
 
-Turso (libSQL). Four tables.
+Turso (libSQL). Six tables.
 
 - **users**: id, email, password_hash, created_at
-- **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, sort_order, created_at
+- **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, **health_kind** (`cycling` | `swimming` | `running` = auto-created from watch signals; `strength` = gym: sets logging + dashboard confirm prompt; null = manual), sort_order, created_at
 - **workouts**: id, user_id→users, activity_type_id→activity_types, date (ISO "YYYY-MM-DD"), notes (nullable), **duration (nullable, range code e.g. "45-60")**, **feeling_score (nullable, 1–5 self-rating)**, created_at
-- **health_metrics**: id, user_id→users, date (ISO), active_calories, resting_hr, sleep_hours, notes, created_at — all metrics nullable. Fed by `/api/watch-sync`. **Unique index on (user_id, date)**: one row per user per day, and the webhook upserts (`onConflictDoUpdate`) so a re-sent day overwrites instead of piling up rows. Duplicates here are silent — averages over identical rows look correct — so the constraint is the only thing that catches it.
+- **health_metrics**: id, user_id→users, date (ISO), active_calories, resting_hr, sleep_hours, notes, created_at — all metrics nullable. Fed by `/api/watch-sync`. Also exercise_minutes, cycling_km, swimming_m, running_speed_kmh, and `gym_prompt_dismissed` (user answered "Nie" to the gym prompt for that day; the webhook upsert never touches it). **Unique index on (user_id, date)**: one row per user per day, and the webhook upserts (`onConflictDoUpdate`) so a re-sent day overwrites instead of piling up rows. Duplicates here are silent — averages over identical rows look correct — so the constraint is the only thing that catches it.
 
-Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
+- **exercises**: id, user_id→users, name, created_at. Unique on (user_id, lower(name)) — SQLite `lower()` folds ASCII only, so the Polish case-insensitive match ("Łydki" = "ŁYDKI") is done in `addExercise` via `exerciseKey()`.
+- **workout_sets**: id, workout_id→workouts (cascade), exercise_id→exercises (cascade), position, reps, weight_kg (null = bodyweight, shown as "MC"), created_at. Exercise order in a workout = min(position) of its sets. Set ids are generated on the client (validated as UUID) so an optimistic set can be edited before the insert returns.
+
+Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
 
 **Migrations run through drizzle now:** `npm run db:generate` → review the SQL → `npm run db:migrate`. `__drizzle_migrations` was baselined on 2026-09-25 (all earlier migrations had been applied by hand); drizzle applies every journal entry whose `when` is newer than the last row there.
 
@@ -129,10 +135,18 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - `workouts.feeling_score` (1–5 stars in the add/edit modal), surfaced in the export as a per-activity average.
 - `POST /api/watch-sync` — bearer-token webhook for Apple Shortcuts, upserts into `health_metrics`.
 
+**Gym phase (2026-09-26):**
+- Modal: picking a `strength` activity turns "Dodaj" into "Rozpocznij trening" → creates the workout and opens `/trening/[id]`. The day list links to the sets page.
+- `/trening/[id]`: exercises as cards, sets with +/- (2.5 kg / 1 rep) or typed values, "+ Seria" copies the last set, a new exercise starts from its last-ever set. Every change saves immediately (Server Action + `useOptimistic`). An empty workout offers "Powtórz ostatni trening" (copies all sets of the previous strength session).
+- `/cwiczenie/[id]`: sessions (kg×reps) + best set.
+- Dashboard: days of the shown week with ≥ `GYM_PROMPT_MIN_MINUTES` (30) exercise minutes, no workout at all and no "Nie" answer get "N min ćwiczeń — to była siłownia?". "Tak" creates a `source = "watch"` gym workout and opens it.
+- Cache tag `gym` for set data; set mutations call `updateTag("gym")`.
+
 ### Verified for real (not just `tsc`)
 - Webhook: 401 on a bad token, 200 + `{"success":true}` on a good one, upsert proven by firing twice → 1 row, `id`/`created_at` unchanged. Now repeatable with `curl` + `?dry=1` (no DB write).
 - `parseAITargets` exercised against a raw JSON reply, a report-plus-fenced-block reply, a reply with a decoy code fence before the JSON, and garbage (throws).
 - Live DB schema confirmed by querying it directly.
+- Gym phase end-to-end on a throwaway user (details in `tasks/todo.md` Review), incl. 390 px layout and the webhook dry run.
 
 ### TODO / next steps
 1. **Deploy to Vercel** — set `AUTH_URL` **and `WATCH_SYNC_SECRET`** (without it the webhook 500s).

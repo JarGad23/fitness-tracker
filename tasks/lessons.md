@@ -19,3 +19,11 @@
 ### Shortcuts loops don't scale linearly
 **Avoid:** Scaling a shortcut's window from a measured small run (7 days of sleep ≈ 200 samples, 3 s) to 90 days (≈ 2700 samples) assuming linear time. The 90-day backfill hung on the phone for 15+ minutes and never sent anything.
 **Better:** Keep per-sample loops small (raw sleep ≤ ~14 days). For long history use day-grouped quantities (one iteration per day). Grow windows in steps and time each run.
+
+### Plan edits must reach every mention
+**Avoid:** Changing a threshold in the plan body after a correction but leaving the Context section describing the old number ("≥ 40"). Jarek saw 40 at the top and had to correct it twice.
+**Better:** After a correction, grep the whole plan for the old value and rewrite the Context line to state the decision explicitly ("Próg: ≥ 30 min — decyzja Jarka").
+
+### Drizzle relational queries rewrite raw sql column refs
+**Avoid:** `` sql`exists (select 1 from ${workoutSets} where ${workoutSets.workoutId} = ${workouts.id})` `` inside `db.query.workouts.findFirst({ where })`. Drizzle renders every column in the raw fragment against the root table alias → `workouts.workout_id` → `no such column` at runtime. `tsc` is clean.
+**Better:** In relational-query `where`, use subquery builders: `inArray(workouts.id, db.selectDistinct({ id: workoutSets.workoutId }).from(workoutSets))`. Raw `sql` with other tables' columns is fine in core `db.select()` queries.

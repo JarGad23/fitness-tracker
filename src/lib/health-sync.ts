@@ -24,7 +24,11 @@ export type DayMetrics = {
   runningSpeedKmh: number | null;
 };
 
-export type HealthKind = "cycling" | "swimming" | "running";
+// Kinds the watch data turns into workouts automatically. `activity_types.health_kind`
+// can also be "strength" (gym): it has no workout-only signal, so it only gets a
+// confirm prompt on the dashboard (see src/lib/gym.ts), never an auto-created workout.
+export const AUTO_DETECTED_KINDS = ["cycling", "swimming", "running"] as const;
+export type HealthKind = (typeof AUTO_DETECTED_KINDS)[number];
 
 export type DetectedWorkout = { date: string; kind: HealthKind; note: string };
 

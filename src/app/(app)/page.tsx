@@ -8,7 +8,9 @@ import { getWeekRange, toISODateString } from "@/lib/utils";
 import {
   getCachedActivityTypes,
   getCachedWorkoutsInRange,
+  getCachedGymPrompts,
 } from "@/lib/queries";
+import { GymPrompts } from "@/components/gym-prompts";
 import { auth } from "@/lib/auth";
 import { startOfWeek, startOfMonth, endOfMonth, endOfWeek } from "date-fns";
 
@@ -117,6 +119,13 @@ async function StatsCards({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
+async function GymPromptsSection({ searchParams }: { searchParams: SearchParams }) {
+  const { userId, weekStartDate, weekEndDate } = await getContext(searchParams);
+  if (!userId) return null;
+  const prompts = await getCachedGymPrompts(userId, weekStartDate, weekEndDate);
+  return <GymPrompts prompts={prompts} />;
+}
+
 async function WeekNav({ searchParams }: { searchParams: SearchParams }) {
   const { normalizedWeekDate } = await getContext(searchParams);
   return <WeekNavigation weekDate={normalizedWeekDate} />;
@@ -219,6 +228,11 @@ export default function DashboardPage({
       <div className="lg:grid lg:grid-cols-3 lg:gap-6">
         {/* Calendar Section */}
         <div className="lg:col-span-2 space-y-4">
+          {/* No skeleton: usually empty, and a placeholder would shift the page. */}
+          <Suspense>
+            <GymPromptsSection searchParams={searchParams} />
+          </Suspense>
+
           <Suspense fallback={<WeekNavSkeleton />}>
             <WeekNav searchParams={searchParams} />
           </Suspense>

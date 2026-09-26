@@ -4,8 +4,9 @@ import {
   integer,
   real,
   uniqueIndex,
+  index,
 } from "drizzle-orm/sqlite-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -26,7 +27,8 @@ export const activityTypes = sqliteTable("activity_types", {
   icon: text("icon").notNull(),
   color: text("color"), // hex, e.g. "#22c55e"
   // Which Apple Watch signal auto-logs this activity: "cycling" | "swimming" |
-  // "running", or null for activities the watch can't detect (e.g. gym).
+  // "running". "strength" (gym) = logs sets and gets a confirm prompt from
+  // exercise minutes instead of an auto-created workout. Null = manual only.
   healthKind: text("health_kind"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
@@ -73,6 +75,10 @@ export const healthMetrics = sqliteTable(
     cyclingKm: real("cycling_km"),
     swimmingM: integer("swimming_m"),
     runningSpeedKmh: real("running_speed_kmh"),
+    // User answered "no" to "was this the gym?" for this day — don't ask again.
+    gymPromptDismissed: integer("gym_prompt_dismissed", { mode: "boolean" })
+      .notNull()
+      .default(false),
     notes: text("notes"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
@@ -83,11 +89,55 @@ export const healthMetrics = sqliteTable(
   ]
 );
 
+// Gym exercise catalog, per user. Created on the fly from the workout page.
+// Names are unique per user ignoring case (the index is on lower(name)).
+export const exercises = sqliteTable(
+  "exercises",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("exercises_user_name_unique").on(table.userId, sql`lower(${table.name})`),
+  ]
+);
+
+// One row per set. Exercise order within a workout = min(position) of its sets.
+export const workoutSets = sqliteTable(
+  "workout_sets",
+  {
+    id: text("id").primaryKey(),
+    workoutId: text("workout_id")
+      .notNull()
+      .references(() => workouts.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    reps: integer("reps").notNull(),
+    weightKg: real("weight_kg"), // null = bodyweight
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("workout_sets_workout_idx").on(table.workoutId),
+    index("workout_sets_exercise_idx").on(table.exerciseId),
+  ]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
   workouts: many(workouts),
   healthMetrics: many(healthMetrics),
+  exercises: many(exercises),
 }));
 
 export const activityTypesRelations = relations(activityTypes, ({ one, many }) => ({
@@ -98,7 +148,7 @@ export const activityTypesRelations = relations(activityTypes, ({ one, many }) =
   workouts: many(workouts),
 }));
 
-export const workoutsRelations = relations(workouts, ({ one }) => ({
+export const workoutsRelations = relations(workouts, ({ one, many }) => ({
   user: one(users, {
     fields: [workouts.userId],
     references: [users.id],
@@ -106,6 +156,23 @@ export const workoutsRelations = relations(workouts, ({ one }) => ({
   activityType: one(activityTypes, {
     fields: [workouts.activityTypeId],
     references: [activityTypes.id],
+  }),
+  sets: many(workoutSets),
+}));
+
+export const exercisesRelations = relations(exercises, ({ one, many }) => ({
+  user: one(users, { fields: [exercises.userId], references: [users.id] }),
+  sets: many(workoutSets),
+}));
+
+export const workoutSetsRelations = relations(workoutSets, ({ one }) => ({
+  workout: one(workouts, {
+    fields: [workoutSets.workoutId],
+    references: [workouts.id],
+  }),
+  exercise: one(exercises, {
+    fields: [workoutSets.exerciseId],
+    references: [exercises.id],
   }),
 }));
 
@@ -125,3 +192,5 @@ export type Workout = typeof workouts.$inferSelect;
 export type NewWorkout = typeof workouts.$inferInsert;
 export type HealthMetric = typeof healthMetrics.$inferSelect;
 export type NewHealthMetric = typeof healthMetrics.$inferInsert;
+export type Exercise = typeof exercises.$inferSelect;
+export type WorkoutSet = typeof workoutSets.$inferSelect;

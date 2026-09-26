@@ -1,3 +1,36 @@
+# Gym phase — sets logging, repeat last, watch prompt, exercise history
+
+Decisions (2026-09-26): relational tables, dedicated workout page, gym prompt at >= 30
+exercise minutes (short sessions happen). AI data contract is a separate phase.
+
+- [x] Migration 0006: `exercises`, `workout_sets`, `health_metrics.gym_prompt_dismissed`,
+      Siłownia → `health_kind = 'strength'` (backup `.backups/db-2026-09-26.json`, verified on live DB)
+- [x] Register seed + watch-sync only auto-creates `AUTO_DETECTED_KINDS`
+- [x] Queries (`gym` tag) + actions (`src/actions/gym.ts`)
+- [x] `/trening/[id]` — exercises, sets with +/-, "+ Seria", instant save (useOptimistic,
+      client-generated set ids), "Powtórz ostatni trening" on an empty workout
+- [x] Modal: "Rozpocznij trening" for strength → workout page; sets link on the day list
+- [x] Dashboard prompt "N min ćwiczeń — to była siłownia?" Tak / Nie
+- [x] `/cwiczenie/[id]` — sessions table + best set
+- [x] E2E on a throwaway user (deleted), 390 px + desktop, `npm run build`
+- [x] HANDOFF §5–§8
+
+## Review (gym phase)
+- "Repeat last" moved from the modal to the empty workout page: it works the same after
+  a watch confirm, and the modal doesn't need set history.
+- E2E: prompts at 30 / 46 min shown, 29 min and a bike day not; "Nie" persists across
+  reload; "Tak" creates a `watch` gym workout and opens it; 4 fast +2.5 taps = 10 kg;
+  "62,5" typed saves; "ŁYDKI" joins "Łydki" (no duplicate exercise); repeat copies all
+  sets; history shows both sessions + record; deleting the workout cascades its sets;
+  watch-sync dry run detects the bike and never auto-creates a gym workout.
+- Bug found only at runtime: raw `sql` inside a relational `findFirst` gets its column
+  refs rewritten to the root table alias (see lessons.md). `tsc` was clean.
+- Known behaviour: deleting a gym workout created from a prompt brings the prompt back
+  for that day (minutes still there, no workout, never answered "Nie").
+- Next: AI data contract (separate phase); maybe duration/feeling on the workout page.
+
+---
+
 # Watch Sync v2 — "dumb shortcut, smart server"
 
 Context (2026-09-25): old shortcut sends today's date with partial-morning calories,

@@ -51,8 +51,9 @@ export async function addWorkout(
     throw new Error("Nie znaleziono typu aktywności");
   }
 
+  const id = uuid();
   await db.insert(workouts).values({
-    id: uuid(),
+    id,
     userId: session.user.id,
     activityTypeId,
     date,
@@ -62,6 +63,7 @@ export async function addWorkout(
   });
 
   updateTag("workouts");
+  return id;
 }
 
 export async function updateWorkout(

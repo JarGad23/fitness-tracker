@@ -1,7 +1,14 @@
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/lib/db";
-import { workouts, activityTypes, healthMetrics } from "@/lib/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import {
+  workouts,
+  activityTypes,
+  healthMetrics,
+  exercises,
+  workoutSets,
+} from "@/lib/db/schema";
+import { eq, and, gte, lte, ne, desc, sql, inArray } from "drizzle-orm";
+import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
 
 // Runtime auth (cookies) is read by the caller and the user id is passed in as an
 // argument, so it becomes part of the cache key. This is the pattern Next.js
@@ -61,4 +68,137 @@ export async function getCachedHealthMetricsInRange(
     ),
     orderBy: (healthMetrics, { asc }) => [asc(healthMetrics.date)],
   });
+}
+
+// --- Gym ---------------------------------------------------------------------
+// Set mutations (src/actions/gym.ts) call updateTag("gym"); workout-level changes
+// call updateTag("workouts"), so both tags are attached where both matter.
+
+export async function getCachedWorkoutWithSets(userId: string, workoutId: string) {
+  "use cache";
+  cacheTag("gym", "workouts");
+  cacheLife("hours");
+
+  return db.query.workouts.findFirst({
+    where: and(eq(workouts.id, workoutId), eq(workouts.userId, userId)),
+    with: {
+      activityType: true,
+      sets: { with: { exercise: true } },
+    },
+  });
+}
+
+// Most recently used first, never-used ones last (alphabetical).
+export async function getCachedExercises(userId: string) {
+  "use cache";
+  cacheTag("gym");
+  cacheLife("hours");
+
+  const lastUsed = sql<string | null>`max(${workouts.date})`;
+  return db
+    .select({ id: exercises.id, name: exercises.name, lastUsed })
+    .from(exercises)
+    .leftJoin(workoutSets, eq(workoutSets.exerciseId, exercises.id))
+    .leftJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .where(eq(exercises.userId, userId))
+    .groupBy(exercises.id)
+    .orderBy(sql`${lastUsed} is null`, desc(lastUsed), exercises.name);
+}
+
+// The latest other strength workout on or before `date` that has sets —
+// the source for "copy exercises from last time".
+export async function getCachedPreviousStrengthSession(
+  userId: string,
+  workoutId: string,
+  date: string
+) {
+  "use cache";
+  cacheTag("gym", "workouts");
+  cacheLife("hours");
+
+  return db.query.workouts.findFirst({
+    where: and(
+      eq(workouts.userId, userId),
+      ne(workouts.id, workoutId),
+      lte(workouts.date, date),
+      inArray(
+        workouts.activityTypeId,
+        db
+          .select({ id: activityTypes.id })
+          .from(activityTypes)
+          .where(
+            and(eq(activityTypes.userId, userId), eq(activityTypes.healthKind, "strength"))
+          )
+      ),
+      // Subquery builder, not raw sql: inside a relational query drizzle rewrites
+      // raw column refs to the root table alias (workout_sets.x → workouts.x).
+      inArray(workouts.id, db.selectDistinct({ id: workoutSets.workoutId }).from(workoutSets))
+    ),
+    with: { sets: { with: { exercise: true } } },
+    orderBy: [desc(workouts.date), desc(workouts.createdAt)],
+  });
+}
+
+export async function getCachedExerciseHistory(userId: string, exerciseId: string) {
+  "use cache";
+  cacheTag("gym", "workouts");
+  cacheLife("hours");
+
+  const exercise = await db.query.exercises.findFirst({
+    where: and(eq(exercises.id, exerciseId), eq(exercises.userId, userId)),
+  });
+  if (!exercise) return null;
+
+  const rows = await db
+    .select({
+      workoutId: workouts.id,
+      date: workouts.date,
+      reps: workoutSets.reps,
+      weightKg: workoutSets.weightKg,
+    })
+    .from(workoutSets)
+    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .where(eq(workoutSets.exerciseId, exerciseId))
+    .orderBy(desc(workouts.date), desc(workouts.createdAt), workoutSets.position);
+
+  const sessions: { workoutId: string; date: string; sets: { reps: number; weightKg: number | null }[] }[] = [];
+  for (const row of rows) {
+    const last = sessions.at(-1);
+    const set = { reps: row.reps, weightKg: row.weightKg };
+    if (last?.workoutId === row.workoutId) last.sets.push(set);
+    else sessions.push({ workoutId: row.workoutId, date: row.date, sets: [set] });
+  }
+  return { exercise, sessions };
+}
+
+// Days in range with enough watch exercise minutes, no workout of any kind, and
+// no "no" answer yet. Empty if the user has no strength activity to confirm into.
+export async function getCachedGymPrompts(
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  "use cache";
+  cacheTag("health-metrics", "workouts", "activity-types");
+  cacheLife("hours");
+
+  const strength = await db.query.activityTypes.findFirst({
+    where: and(eq(activityTypes.userId, userId), eq(activityTypes.healthKind, "strength")),
+  });
+  if (!strength) return [];
+
+  return db
+    .select({ date: healthMetrics.date, minutes: healthMetrics.exerciseMinutes })
+    .from(healthMetrics)
+    .where(
+      and(
+        eq(healthMetrics.userId, userId),
+        gte(healthMetrics.date, startDate),
+        lte(healthMetrics.date, endDate),
+        gte(healthMetrics.exerciseMinutes, GYM_PROMPT_MIN_MINUTES),
+        eq(healthMetrics.gymPromptDismissed, false),
+        sql`not exists (select 1 from ${workouts} where ${workouts.userId} = ${userId} and ${workouts.date} = ${healthMetrics.date})`
+      )
+    )
+    .orderBy(healthMetrics.date);
 }

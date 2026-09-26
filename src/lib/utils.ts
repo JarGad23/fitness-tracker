@@ -81,3 +81,8 @@ export function isFutureDate(date: Date) {
   checkDate.setHours(0, 0, 0, 0);
   return checkDate > today;
 }
+
+// CSS `capitalize` uppercases every word ("Pon. 21 Wrz"); this does the first only.
+export function capitalizeFirst(text: string) {
+  return text.charAt(0).toLocaleUpperCase("pl") + text.slice(1);
+}

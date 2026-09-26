@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -33,6 +35,7 @@ import {
   Pencil,
   Star,
   X,
+  ListChecks,
 } from "lucide-react";
 import {
   cn,
@@ -79,6 +82,12 @@ export function AddActivityModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Strength workouts get their sets logged on their own page.
+  const startsStrengthWorkout =
+    !editingId &&
+    activityTypes.find((a) => a.id === selectedActivity)?.healthKind === "strength";
 
   // Reset the picked date when the modal opens for a different day
   // (derive-on-prop-change, no effect needed).
@@ -124,14 +133,19 @@ export function AddActivityModal({
         );
         toast.success("Zapisano zmiany");
       } else {
-        await addWorkout(
+        const id = await addWorkout(
           selectedActivity,
           toISODateString(selectedDate),
           notes || undefined,
           duration || undefined,
           feelingScore ?? undefined
         );
-        toast.success("Dodano aktywność");
+        if (startsStrengthWorkout) {
+          router.push(`/trening/${id}`);
+          onOpenChange(false);
+        } else {
+          toast.success("Dodano aktywność");
+        }
       }
       resetState();
     } catch (error) {
@@ -257,6 +271,15 @@ export function AddActivityModal({
                               )}
                             />
                           </Button>
+                        )}
+                        {workout.activityType.healthKind === "strength" && (
+                          <Link
+                            href={`/trening/${workout.id}`}
+                            aria-label="Serie"
+                            className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-primary"
+                          >
+                            <ListChecks className="w-4 h-4" />
+                          </Link>
                         )}
                         <Button
                           variant="ghost"
@@ -460,7 +483,9 @@ export function AddActivityModal({
                 : "Dodawanie..."
               : editingId
                 ? "Zapisz"
-                : "Dodaj"}
+                : startsStrengthWorkout
+                  ? "Rozpocznij trening"
+                  : "Dodaj"}
           </Button>
         </div>
       </DialogContent>

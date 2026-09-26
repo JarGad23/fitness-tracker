@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
 import { users, healthMetrics, activityTypes, workouts } from "@/lib/db/schema";
-import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { revalidateTag } from "next/cache";
 import {
   detectWorkouts,
+  AUTO_DETECTED_KINDS,
   parseHealthPayload,
   type DayMetrics,
   type HealthKind,
@@ -63,7 +64,7 @@ async function planWatchWorkouts(userId: string, days: DayMetrics[]) {
   if (detected.length === 0) return [];
 
   const linked = await db.query.activityTypes.findMany({
-    where: and(eq(activityTypes.userId, userId), isNotNull(activityTypes.healthKind)),
+    where: and(eq(activityTypes.userId, userId), inArray(activityTypes.healthKind, [...AUTO_DETECTED_KINDS])),
   });
   const byKind = new Map(linked.map((t) => [t.healthKind as HealthKind, t]));
 

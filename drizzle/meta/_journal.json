@@ -43,6 +43,13 @@
       "when": 1790365635894,
       "tag": "0005_watch_workouts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790408241280,
+      "tag": "0006_gym_sets",
+      "breakpoints": true
     }
   ]
 }
