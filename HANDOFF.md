@@ -58,6 +58,8 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 
 ### Routing / middleware
 - `src/proxy.ts` (Next 16 convention) replaces `middleware.ts`. It's the NextAuth `auth()` wrapper that redirects unauthenticated users to `/login` and authed users away from `/login`,`/register`.
+- Passwords: bcryptjs (pure JS) at `BCRYPT_ROUNDS = 10`; older cost-12 hashes are rewritten on the next successful login. Registration signs the user in directly.
+- Auth forms use `onSubmit` (not `<form action>`, which resets fields after a failed login) plus `method="post"` as a pre-hydration guard.
 - `src/lib/auth.ts` has **`trustHost: true`** — required for `next start`/self-hosting (Auth.js only auto-trusts host in dev).
 
 ### Per-activity colors & icons (customizable)
@@ -90,7 +92,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
 | Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
-| Auth screens (shared bg + card) | `src/app/(auth)/layout.tsx`, `src/components/auth-card.tsx` |
+| Auth screens (split: showcase + form) | `src/app/(auth)/layout.tsx`, `src/components/auth-showcase.tsx`, `login-form.tsx`, `(auth)/register/page.tsx`, `password-input.tsx` |
 | Gym: workout page (sets editor) | `src/app/(app)/trening/[id]/page.tsx`, `src/components/workout-sets.tsx` |
 | Gym: exercise history | `src/app/(app)/cwiczenie/[id]/page.tsx` |
 | Gym: actions / helpers / dashboard prompt | `src/actions/gym.ts`, `src/lib/gym.ts`, `src/components/gym-prompts.tsx` |

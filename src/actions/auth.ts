@@ -4,7 +4,7 @@ import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { users, activityTypes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { signIn, signOut } from "@/lib/auth";
+import { signIn, signOut, BCRYPT_ROUNDS } from "@/lib/auth";
 import { updateTag } from "next/cache";
 import { v4 as uuid } from "uuid";
 import { AuthError } from "next-auth";
@@ -41,7 +41,7 @@ export async function register(formData: FormData) {
     return { error: "Użytkownik o tym emailu już istnieje" };
   }
 
-  const passwordHash = await hash(password, 12);
+  const passwordHash = await hash(password, BCRYPT_ROUNDS);
   const userId = uuid();
 
   await db.insert(users).values({
@@ -59,6 +59,8 @@ export async function register(formData: FormData) {
     }))
   );
 
+  // Sign straight in: no second trip through the login form.
+  await signIn("credentials", { email, password, redirect: false });
   return { ok: true };
 }
 

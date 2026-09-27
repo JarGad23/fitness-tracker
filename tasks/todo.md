@@ -1,3 +1,24 @@
+# Auth screens — redesign + speed
+
+Report (2026-09-27): login feels laggy, ~0.5 s pause after Enter "as if two requests",
+fields wiped after a wrong password, plain design.
+
+- [x] Causes measured: bcryptjs cost 12 = 190 ms (pure JS); first Turso query on a cold
+      connection ~570 ms; `router.push` + `router.refresh()` = a second dashboard request;
+      `<form action>` resets the form after the action; three large `blur-3xl` layers
+- [x] bcrypt cost 10 (`BCRYPT_ROUNDS`), cost-12 hashes rewritten on the next login
+- [x] onSubmit + `method="post"` (fields survive errors; no password in the URL if Enter
+      lands before hydration); one transition over action + navigation; no refresh
+- [x] Register signs in directly (no retyping on the login screen)
+- [x] Split layout: showcase panel (animated weekly-pool rings) + form; compact rings
+      header on mobile; password show/hide; autocomplete attributes
+- [x] Verified on a throwaway user (deleted): wrong password keeps both fields, register
+      → dashboard, cost-12 hash → `$2b$10$` after login; prod build Enter → dashboard
+      190–234 ms warm / 600 ms cold (was ~550 ms for the action alone + extra request);
+      390 px without horizontal scroll
+
+---
+
 # Gym phase — sets logging, repeat last, watch prompt, exercise history
 
 Decisions (2026-09-26): relational tables, dedicated workout page, gym prompt at >= 30

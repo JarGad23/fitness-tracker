@@ -1,9 +1,14 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { compare } from "bcryptjs";
+import { compare, getRounds, hash } from "bcryptjs";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+
+// bcryptjs is pure JS: cost 12 took ~190 ms per login on an M5 Max, more on Vercel's
+// slower CPUs. 10 is 4x cheaper (~70 ms) and still OWASP's minimum for bcrypt. Older cost-12
+// hashes are rewritten on the next successful login.
+export const BCRYPT_ROUNDS = 10;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Auth.js only auto-trusts the host in dev. Under `next start` / self-hosting
@@ -36,6 +41,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!isValid) {
           return null;
+        }
+
+        if (getRounds(user.passwordHash) !== BCRYPT_ROUNDS) {
+          await db
+            .update(users)
+            .set({ passwordHash: await hash(password, BCRYPT_ROUNDS) })
+            .where(eq(users.id, user.id));
         }
 
         return {

@@ -1,112 +1,103 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { login } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CardContent } from "@/components/ui/card";
-import { AuthCard } from "@/components/auth-card";
-import { Loader2 } from "lucide-react";
+import { AuthHeading } from "@/components/auth-heading";
+import { PasswordInput } from "@/components/password-input";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
-  const [isPending, setIsPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const registered = searchParams.get("registered");
 
-  async function handleSubmit(formData: FormData) {
-    setIsPending(true);
+  // onSubmit, not <form action>: React resets a form after its action runs, which
+  // wiped the email and password on every failed attempt.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     setError(null);
-    try {
-      const result = await login(formData);
-      if (result?.error) {
-        setError(result.error);
-        toast.error(result.error);
-        setIsPending(false);
-        return;
+    // One transition covers the action and the navigation, so the button keeps
+    // its spinner until the dashboard is ready instead of going idle in between.
+    startTransition(async () => {
+      try {
+        const result = await login(formData);
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
+        router.replace("/");
+      } catch {
+        setError("Wystąpił błąd podczas logowania");
       }
-      toast.success("Zalogowano");
-      router.push("/");
-      router.refresh();
-    } catch {
-      const message = "Wystąpił błąd podczas logowania";
-      setError(message);
-      toast.error(message);
-      setIsPending(false);
-    }
+    });
   }
 
   return (
-    <AuthCard title="Fitness Tracker" description="Zaloguj się do swojego konta">
-      <form action={handleSubmit}>
-        <CardContent className="space-y-5 px-6 pb-8 pt-5 sm:px-8">
-          {registered && (
-            <div className="rounded-xl border border-primary/20 bg-primary/10 p-4 text-sm font-medium text-primary">
-              Konto utworzone! Możesz się teraz zalogować.
-            </div>
+    <div className="space-y-8">
+      <AuthHeading title="Witaj z powrotem" description="Zaloguj się, żeby zobaczyć swój tydzień." />
+
+      {/* method="post": if Enter lands before hydration, the native submit must not put the password in the URL. */}
+      <form method="post" onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <p
+            role="alert"
+            className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+          >
+            {error}
+          </p>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="twoj@email.pl"
+            required
+            autoFocus
+            aria-invalid={error ? true : undefined}
+            className="h-12 rounded-xl"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Hasło</Label>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            aria-invalid={error ? true : undefined}
+            className="h-12 rounded-xl"
+          />
+        </div>
+        <Button type="submit" disabled={isPending} className="h-12 w-full rounded-xl text-base font-semibold">
+          {isPending ? (
+            <>
+              <Loader2 className="animate-spin" />
+              Logowanie…
+            </>
+          ) : (
+            <>
+              Zaloguj się
+              <ArrowRight />
+            </>
           )}
-          {error && (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
-              {error}
-            </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">
-              Email
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="twoj@email.pl"
-              required
-              className="h-12 rounded-xl"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium">
-              Hasło
-            </Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              className="h-12 rounded-xl"
-            />
-          </div>
-          <div className="space-y-4 pt-1">
-            <Button
-              type="submit"
-              className="h-12 w-full rounded-xl text-base font-semibold"
-              disabled={isPending}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logowanie...
-                </>
-              ) : (
-                "Zaloguj się"
-              )}
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              Nie masz konta?{" "}
-              <Link
-                href="/register"
-                className="font-medium text-primary hover:underline"
-              >
-                Zarejestruj się
-              </Link>
-            </p>
-          </div>
-        </CardContent>
+        </Button>
       </form>
-    </AuthCard>
+
+      <p className="text-sm text-muted-foreground">
+        Nie masz konta?{" "}
+        <Link href="/register" className="font-semibold text-primary hover:underline">
+          Załóż je
+        </Link>
+      </p>
+    </div>
   );
 }

@@ -27,3 +27,15 @@
 ### Drizzle relational queries rewrite raw sql column refs
 **Avoid:** `` sql`exists (select 1 from ${workoutSets} where ${workoutSets.workoutId} = ${workouts.id})` `` inside `db.query.workouts.findFirst({ where })`. Drizzle renders every column in the raw fragment against the root table alias → `workouts.workout_id` → `no such column` at runtime. `tsc` is clean.
 **Better:** In relational-query `where`, use subquery builders: `inArray(workouts.id, db.selectDistinct({ id: workoutSets.workoutId }).from(workoutSets))`. Raw `sql` with other tables' columns is fine in core `db.select()` queries.
+
+### React form actions reset the form
+**Avoid:** `<form action={clientFn}>` for forms that can fail (login). React 19 resets an action form after the action finishes, so a wrong password wiped the email and password.
+**Better:** `onSubmit` + `preventDefault` + `new FormData(e.currentTarget)`, with `method="post"` on the form so a pre-hydration Enter never puts the password in the URL. Wrap the action and the following `router.replace` in one `startTransition` so the pending state lasts until the page changes; don't add `router.refresh()` after a push (it is a second request).
+
+### Timing in a background Chrome tab is quantized to 1 s
+**Avoid:** Measuring UI latency with `setTimeout` polling in a tab the automation drives. The tab is in the background, timers clamp to ~1 s, and every run "took" 1000 ms. `requestAnimationFrame` never fires there at all (the script hung).
+**Better:** Wait with `MutationObserver` and read `performance.getEntriesByType("resource")`; cross-check with server-side timings. Measure in a production build (`next build` + `next start`), not dev.
+
+### Claude-in-Chrome clicks can silently miss
+**Avoid:** Retrying coordinate clicks/typing when nothing happens. After a window resize attempt, clicks on "Wyloguj" and keystrokes into inputs stopped landing (no request, no error) while the page was fine.
+**Better:** After one miss, check the DOM (`document.activeElement`, input values) and drive the flow through JS (`el.click()`, native value setter + `input` event + `form.requestSubmit()`), which still goes through the real handlers.
