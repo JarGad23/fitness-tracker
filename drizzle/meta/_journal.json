@@ -50,6 +50,13 @@
       "when": 1790408241280,
       "tag": "0006_gym_sets",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790685765208,
+      "tag": "0007_coach_reports",
+      "breakpoints": true
     }
   ]
 }

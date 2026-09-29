@@ -132,12 +132,36 @@ export const workoutSets = sqliteTable(
   ]
 );
 
+// Reports posted by the local AI coach through POST /api/ai/reports. The coach only
+// proposes targets; they change activity_types when the user applies them in the UI.
+export const coachReports = sqliteTable(
+  "coach_reports",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text("body").notNull(), // Markdown
+    model: text("model"),
+    periodStart: text("period_start"), // ISO date
+    periodEnd: text("period_end"),
+    // Proposed targets: [{ name, targetPerWeek }], null = report without targets
+    targets: text("targets", { mode: "json" }).$type<{ name: string; targetPerWeek: number }[]>(),
+    appliedAt: integer("applied_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("coach_reports_user_created_idx").on(table.userId, table.createdAt)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
   workouts: many(workouts),
   healthMetrics: many(healthMetrics),
   exercises: many(exercises),
+  coachReports: many(coachReports),
 }));
 
 export const activityTypesRelations = relations(activityTypes, ({ one, many }) => ({
@@ -183,6 +207,10 @@ export const healthMetricsRelations = relations(healthMetrics, ({ one }) => ({
   }),
 }));
 
+export const coachReportsRelations = relations(coachReports, ({ one }) => ({
+  user: one(users, { fields: [coachReports.userId], references: [users.id] }),
+}));
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -194,3 +222,4 @@ export type HealthMetric = typeof healthMetrics.$inferSelect;
 export type NewHealthMetric = typeof healthMetrics.$inferInsert;
 export type Exercise = typeof exercises.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
+export type CoachReport = typeof coachReports.$inferSelect;

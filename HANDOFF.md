@@ -1,7 +1,7 @@
 # Fitness Tracker — Handoff / Project Status
 
 > Single source of truth for picking up this project. Read this top-to-bottom before changing anything.
-> **Last updated:** 2026-09-26 — gym phase (sets logging, watch "was this the gym?" prompt)
+> **Last updated:** 2026-09-29 — AI API for the local coach (`/api/ai/context`, `/api/ai/reports`)
 
 ---
 
@@ -37,9 +37,10 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 
 ## 4. Secrets
 
-- `.env` (gitignored) holds `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`, `WATCH_SYNC_SECRET`. **Never commit or paste real values** (they leaked once via HANDOFF.md and were rotated; history was rewritten + force-pushed).
+- `.env` (gitignored) holds `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `AUTH_SECRET`, `WATCH_SYNC_SECRET`, `AI_API_SECRET`. **Never commit or paste real values** (they leaked once via HANDOFF.md and were rotated; history was rewritten + force-pushed).
 - For deploy: also set `AUTH_URL` to the real origin. `AUTH_SECRET` can be regenerated with `openssl rand -base64 32` (logs everyone out, harmless).
 - `WATCH_SYNC_SECRET` — bearer token for `POST /api/watch-sync` (Apple Shortcuts). Generate with `openssl rand -hex 32`. **Must be set on Vercel too**, otherwise the webhook returns 500 `Server misconfigured`.
+- `AI_API_SECRET` — bearer token for `/api/ai/*` (local AI coach). Separate from `WATCH_SYNC_SECRET` on purpose: a leaked token opens one client's route only. Same generation, same "set it on Vercel" rule. Both checks go through `checkBearer()` in `src/lib/api-auth.ts`.
 
 ---
 
@@ -89,6 +90,8 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | AI Coach export/import (pure fns) | `src/lib/ai-sync.ts` (`buildCoachMarkdown`, `parseAITargets`) |
 | AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
+| Local AI coach API (contract in §8) | `src/app/api/ai/context/route.ts`, `src/app/api/ai/reports/route.ts`, `src/lib/ai-context.ts` (pure JSON builder), `src/components/coach-report.tsx` |
+| Bearer auth for machine clients | `src/lib/api-auth.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
 | Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
@@ -102,7 +105,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 
 ## 7. Database
 
-Turso (libSQL). Six tables.
+Turso (libSQL). Seven tables.
 
 - **users**: id, email, password_hash, created_at
 - **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, **health_kind** (`cycling` | `swimming` | `running` = auto-created from watch signals; `strength` = gym: sets logging + dashboard confirm prompt; null = manual), sort_order, created_at
@@ -111,8 +114,9 @@ Turso (libSQL). Six tables.
 
 - **exercises**: id, user_id→users, name, created_at. Unique on (user_id, lower(name)) — SQLite `lower()` folds ASCII only, so the Polish case-insensitive match ("Łydki" = "ŁYDKI") is done in `addExercise` via `exerciseKey()`.
 - **workout_sets**: id, workout_id→workouts (cascade), exercise_id→exercises (cascade), position, reps, weight_kg (null = bodyweight, shown as "MC"), created_at. Exercise order in a workout = min(position) of its sets. Set ids are generated on the client (validated as UUID) so an optimistic set can be edited before the insert returns.
+- **coach_reports**: id, user_id→users (cascade), body (Markdown), model, period_start/period_end (ISO, nullable), targets (JSON `[{ name, targetPerWeek }]`, names stored in the user's spelling), applied_at (null = not applied), created_at. Index (user_id, created_at). Written only by `POST /api/ai/reports`; `applied_at` set by the "Zastosuj cele" action.
 
-Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
+Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`), `0007` (`coach_reports`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
 
 **Migrations run through drizzle now:** `npm run db:generate` → review the SQL → `npm run db:migrate`. `__drizzle_migrations` was baselined on 2026-09-25 (all earlier migrations had been applied by hand); drizzle applies every journal entry whose `when` is newer than the last row there.
 
@@ -144,6 +148,19 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - Dashboard: days of the shown week with ≥ `GYM_PROMPT_MIN_MINUTES` (30) exercise minutes, no workout at all and no "Nie" answer get "N min ćwiczeń — to była siłownia?". "Tak" creates a `source = "watch"` gym workout and opens it.
 - Cache tag `gym` for set data; set mutations call `updateTag("gym")`.
 
+**AI API for the local coach (2026-09-29):** the app only exposes a contract; the model runs on the Mac (separate project). Bearer `AI_API_SECRET`.
+- `GET /api/ai/context?user_email=…&weeks=4&today=YYYY-MM-DD` → JSON `version: 1`: `activities`, `weeks[]` (Mon–Sun, oldest first, `current` flag; per-activity done/target/feeling_avg and health averages — computed server-side because small models are bad at arithmetic), `workouts[]` (strength ones with `exercises[].sets[]`), `health_days[]`, `latest_report` (`applied` flag). `weeks` 1–12; pass `today` from the Mac (Vercel is UTC).
+- `POST /api/ai/reports` `{ user_email, report (Markdown ≤ 20k), model?, period_start?, period_end?, targets?: [{ name, target_per_week }] }` → 201 `{ id }`. Every problem is a 4xx with a JSON reason: an invalid target entry or an unknown activity name → 422 (with `unknown` + `known` names) so the model can retry. Targets are never applied by the API.
+- `/ai-coach` shows the latest report above the Gemini export: body as plain text (no Markdown renderer), current → proposed targets, "Zastosuj cele" (`applyReportTargets`, one-shot: sets `applied_at`). Cache tag `coach-reports`.
+- The paste flow now reports unmatched activity names too (warning toast) — the silent skip from the old known gap is gone.
+
+```bash
+curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"
+curl -X POST -H "Authorization: Bearer $AI_API_SECRET" -H 'Content-Type: application/json' \
+  -d '{"user_email":"<email>","model":"<name>","report":"## Ocena\n…","targets":[{"name":"Siłownia","target_per_week":3}]}' \
+  https://<host>/api/ai/reports
+```
+
 ### Verified for real (not just `tsc`)
 - Webhook: 401 on a bad token, 200 + `{"success":true}` on a good one, upsert proven by firing twice → 1 row, `id`/`created_at` unchanged. Now repeatable with `curl` + `?dry=1` (no DB write).
 - `parseAITargets` exercised against a raw JSON reply, a report-plus-fenced-block reply, a reply with a decoy code fence before the JSON, and garbage (throws).
@@ -151,12 +168,12 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - Gym phase end-to-end on a throwaway user (details in `tasks/todo.md` Review), incl. 390 px layout and the webhook dry run.
 
 ### TODO / next steps
-1. **Deploy to Vercel** — set `AUTH_URL` **and `WATCH_SYNC_SECRET`** (without it the webhook 500s).
+1. **Deploy to Vercel** — set `AUTH_URL`, `WATCH_SYNC_SECRET` **and `AI_API_SECRET`** (without them the matching routes 500).
 2. **Apple Shortcuts — "Watch Sync v2"** (2026-09-25, verified against the Health app on real data). The shortcut does no math: it sends the last 7 days as text lines and the server aggregates (`src/lib/health-sync.ts`). Payload: `{ version: 2, user_email, today, active_calories: "YYYY-MM-DD;kcal\n…" (grouped by day), resting_hr: "YYYY-MM-DD;bpm\n…" (raw, averaged per day), sleep: "start;end;stage\n…" (raw, overlapping intervals merged, "Czuwanie"/"W łóżku" skipped, night assigned to wake-up day) }`. Every run re-sends the week, so missed runs self-heal and today's partial values get overwritten next day. `?dry=1` parses without writing; `WATCH_SYNC_DEBUG=1` logs the raw payload. The v1 single-day payload `{ date, active_calories, resting_hr, sleep_hours, user_email }` still works; non-positive values are stored as null.
    - **Shortcuts date-filter gotcha:** in the `.wflow` plist, `Start Date` operator `1002` means **"is today"** (the Number is ignored) and `1001` + `Unit 16` means **"in the last N days"**. The v1 shortcut used `1002` believing it was "last 7 days" — that's why it only ever sent morning calories.
    - Shortcuts **cannot read workouts**. Instead the payload carries workout-only signals (`cycling_km`, `swimming_m`, `running_speed`, plus `exercise_minutes`), stored per day in `health_metrics`. `detectWorkouts()` creates a `workouts` row with `source = "watch"` for the activity whose `activity_types.health_kind` matches — only when that day's signal **first crosses its threshold**, and only if the day has no workout of that activity yet. So re-sending the week never duplicates, and a workout the user deletes never comes back. Gym has no workout-only signal and stays manual.
 3. **Still unverified by a human:** feeling-score stars (save + reload on edit), and the full Gemini round-trip. Health data so far is **mock** (620 kcal / 54 bpm / 7.5 h) from the test script.
-4. **Known gap:** if the AI renames an activity ("Siłownia" → "Gym"), `syncAITargets` **skips it silently** and still reports success. The prompt warns against it; the code doesn't report unmatched names. Fix = return skipped names from the action and show them in the UI.
+4. ~~Known gap: renamed activities skipped silently~~ — fixed 2026-09-29 (paste flow warns, API returns 422).
 5. The AI's advice is only as good as the data — the export needs real logged workouts to be worth anything.
 
 ---

@@ -1,3 +1,35 @@
+# AI API — context out, report in
+
+Decisions (2026-09-29): read + report write, separate `AI_API_SECRET`, latest report on
+`/ai-coach` with "Zastosuj cele". The local model itself is a separate project.
+
+- [x] Migration 0007: `coach_reports`
+- [x] `src/lib/api-auth.ts` (bearer check shared with watch-sync)
+- [x] `normalizeTargets` + `applyTargets` (skipped names reported)
+- [x] `buildAIContext` + queries
+- [x] `GET /api/ai/context`, `POST /api/ai/reports`
+- [x] Report card on `/ai-coach` + `applyReportTargets`
+- [x] Verify: tsc, lint, build, curl, Chrome 390 px + desktop, throwaway user deleted
+- [x] HANDOFF
+
+## Review
+- Verified on `next start` (prod build) with a temporary `AI_API_SECRET` passed in the
+  process env (`.env` untouched): GET 401/400/404/200; aggregates for 21–27.09 on the real
+  account match a direct SQL query (4× gym, 624 kcal, 57 bpm, 6.5 h, 245 min).
+- POST on a throwaway user (deleted, cascade checked): 401, invalid JSON, missing report,
+  bad period, invalid target, partly invalid list, unknown name (422 + known names), 201.
+- Found in the browser, not in curl: a target sent as "siłownia" was stored and shown
+  lowercase → the route now stores the user's spelling.
+- UI: desktop + 390 px (same-origin iframe, window resize didn't apply): no horizontal
+  scroll, cards don't overlap, long words wrap. "Zastosuj cele" → toast, button disabled,
+  dashboard Siłownia 1/4, context `applied: true`. watch-sync still 401 / 200 (dry) after
+  moving the bearer check to `src/lib/api-auth.ts`.
+- Resting HR 88/93 bpm on 28–29.09 (vs 52–64) is real, not a sync bug: Jarek had a fever,
+  ~5 h sleep and a first long mountain hike on 28.09.
+- Needs Jarek: add `AI_API_SECRET` to `.env` and Vercel, deploy.
+
+---
+
 # Auth screens — redesign + speed
 
 Report (2026-09-27): login feels laggy, ~0.5 s pause after Enter "as if two requests",

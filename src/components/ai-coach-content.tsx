@@ -40,6 +40,9 @@ export function AiCoachContent({ markdown }: { markdown: string }) {
         toast.error(result.error);
         return;
       }
+      if (result.skipped.length > 0) {
+        toast.warning(`Pominięto nieznane aktywności: ${result.skipped.join(", ")}`);
+      }
       if (result.updated.length === 0) {
         toast.info("Brak zmian — cele są już aktualne");
         return;

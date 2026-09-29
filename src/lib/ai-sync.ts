@@ -15,7 +15,7 @@ export type WorkoutRow = Workout & { activityType: ActivityType };
 
 export type ParsedTarget = { name: string; targetPerWeek: number };
 
-function avg(values: number[]): number | null {
+export function avg(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
@@ -180,10 +180,19 @@ export function parseAITargets(text: string): ParsedTarget[] {
     throw new Error("Nieprawidłowy JSON — wklej odpowiedź AI w formacie JSON");
   }
 
+  return normalizeTargets(parsed);
+}
+
+/**
+ * Validate targets from a parsed JSON value: `{ targets: [...] }` or a bare array of
+ * `{ name, target_per_week }` (camelCase accepted). Invalid entries are dropped;
+ * throws when nothing valid is left. Shared by the paste flow and /api/ai/reports.
+ */
+export function normalizeTargets(raw: unknown): ParsedTarget[] {
   const rawTargets =
-    parsed && typeof parsed === "object" && "targets" in parsed
-      ? (parsed as { targets: unknown }).targets
-      : parsed;
+    raw && typeof raw === "object" && "targets" in raw
+      ? (raw as { targets: unknown }).targets
+      : raw;
 
   if (!Array.isArray(rawTargets)) {
     throw new Error('JSON musi zawierać tablicę "targets"');

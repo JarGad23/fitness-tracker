@@ -6,6 +6,7 @@ import {
   healthMetrics,
   exercises,
   workoutSets,
+  coachReports,
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, ne, desc, sql, inArray } from "drizzle-orm";
 import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
@@ -201,4 +202,41 @@ export async function getCachedGymPrompts(
       )
     )
     .orderBy(healthMetrics.date);
+}
+
+// --- AI coach API ---------------------------------------------------------------
+
+// Workouts with their gym sets, for the /api/ai/context export.
+export async function getCachedWorkoutsWithSetsInRange(
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  "use cache";
+  cacheTag("workouts", "gym");
+  cacheLife("hours");
+
+  return db.query.workouts.findMany({
+    where: and(
+      eq(workouts.userId, userId),
+      gte(workouts.date, startDate),
+      lte(workouts.date, endDate)
+    ),
+    with: { activityType: true, sets: { with: { exercise: true } } },
+    orderBy: (workouts, { asc }) => [asc(workouts.date), asc(workouts.createdAt)],
+  });
+}
+
+// Long stale is safe: POST /api/ai/reports calls revalidateTag("coach-reports") and
+// applying a report's targets calls updateTag("coach-reports").
+export async function getCachedLatestCoachReport(userId: string) {
+  "use cache";
+  cacheTag("coach-reports");
+  cacheLife("hours");
+
+  const report = await db.query.coachReports.findFirst({
+    where: eq(coachReports.userId, userId),
+    orderBy: [desc(coachReports.createdAt)],
+  });
+  return report ?? null;
 }

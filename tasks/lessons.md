@@ -39,3 +39,9 @@
 ### Claude-in-Chrome clicks can silently miss
 **Avoid:** Retrying coordinate clicks/typing when nothing happens. After a window resize attempt, clicks on "Wyloguj" and keystrokes into inputs stopped landing (no request, no error) while the page was fine.
 **Better:** After one miss, check the DOM (`document.activeElement`, input values) and drive the flow through JS (`el.click()`, native value setter + `input` event + `form.requestSubmit()`), which still goes through the real handlers.
+
+### Mobile-width checks when the window won't resize
+**Avoid:** Retrying `resize_window` — it reported success while `innerWidth` stayed 1728 px.
+**Better:** Check `innerWidth` right after resizing. If it didn't change, load the page in a
+same-origin `<iframe style="width:390px">`, then measure `contentDocument.documentElement.scrollWidth`
+and card rects, and zoom-screenshot the iframe region.

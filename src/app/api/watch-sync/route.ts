@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/db";
 import { users, healthMetrics, activityTypes, workouts } from "@/lib/db/schema";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { revalidateTag } from "next/cache";
+import { checkBearer } from "@/lib/api-auth";
 import {
   detectWorkouts,
   AUTO_DETECTED_KINDS,
@@ -86,25 +86,9 @@ async function planWatchWorkouts(userId: string, days: DayMetrics[]) {
   });
 }
 
-function tokenMatches(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(request: Request) {
-  const secret = process.env.WATCH_SYNC_SECRET;
-  if (!secret) {
-    console.error("WATCH_SYNC_SECRET is not set");
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-  }
-
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token || !tokenMatches(token, secret)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const denied = checkBearer(request, "WATCH_SYNC_SECRET");
+  if (denied) return denied;
 
   let body: unknown;
   try {
