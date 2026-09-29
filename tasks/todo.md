@@ -1,3 +1,34 @@
+# Day notes — tags + text, sent to the AI
+
+Decisions (2026-09-29): quick tags + optional text; "Dziś" card on the dashboard + day
+modal for earlier days; calendar dot; notes in the local AI API and the Gemini export.
+
+- [x] Migration 0008: `day_notes` (unique user+date)
+- [x] `src/lib/day-notes.ts` (tags), actions, query
+- [x] `DayNoteEditor` (chips save at once, text on blur, loads unknown dates)
+- [x] Dashboard "Dziś" card, calendar dot, modal section
+- [x] AI context + Gemini export
+- [x] Verify: tsc, lint, build, throwaway user, desktop + 390 px, modal flows re-clicked
+- [x] HANDOFF
+
+## Review
+- Bugs found only by clicking, all fixed: (1) a tap followed by typing lost tags/text —
+  the server refresh after the first save overwrote local state, and handlers read stale
+  `tags`; (2) text saved only on blur, so closing the phone app mid-note would lose it
+  while the status said "Zapisano" → autosave after 800 ms, no "Zapisano" while dirty;
+  (3) mobile note icon covered the day number → moved under it.
+- Verified on a throwaway user (deleted, cascade checked): taps + typing → DB exact;
+  reload keeps it; clearing a note deletes the row and its calendar icon; a date picked
+  outside the month (10.08) loads its old note instead of wiping it; editing today in the
+  modal updates the dashboard card; add/delete workout in the modal still works; API
+  `day_notes` / `day_tags` / legend; Gemini export lists the note. Desktop + 390 px
+  (iframe): no horizontal scroll, cards and modal don't overlap.
+- Also: the workout note field in the modal is now "Notatka do aktywności" (two note
+  fields in one modal were ambiguous); `/api/ai/context` default `today` uses Polish time.
+- Found, not fixed: JWT outlives a deleted user (HANDOFF §8).
+
+---
+
 # AI API — context out, report in
 
 Decisions (2026-09-29): read + report write, separate `AI_API_SECRET`, latest report on

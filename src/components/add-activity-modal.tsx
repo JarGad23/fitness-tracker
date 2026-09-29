@@ -51,6 +51,8 @@ import {
 import { addWorkout, updateWorkout, deleteWorkout } from "@/actions/workouts";
 import { DURATION_OPTIONS, durationLabel } from "@/lib/durations";
 import type { ActivityType, Workout } from "@/lib/db/schema";
+import type { DayNoteValue } from "@/lib/day-notes";
+import { DayNoteEditor } from "./day-note-editor";
 
 type WorkoutWithType = Workout & { activityType: ActivityType };
 
@@ -61,6 +63,8 @@ type AddActivityModalProps = {
   dateString: string;
   activityTypes: ActivityType[];
   workouts?: WorkoutWithType[];
+  // null = the day has no note, undefined = not loaded (the editor fetches it)
+  noteFor: (date: string) => DayNoteValue | null | undefined;
 };
 
 export function AddActivityModal({
@@ -70,6 +74,7 @@ export function AddActivityModal({
   dateString,
   activityTypes,
   workouts = [],
+  noteFor,
 }: AddActivityModalProps) {
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(date);
@@ -325,6 +330,15 @@ export function AddActivityModal({
           )}
 
           <div className="space-y-2">
+            <Label className="text-sm font-medium">Jak minął dzień?</Label>
+            <DayNoteEditor
+              key={toISODateString(selectedDate)}
+              date={toISODateString(selectedDate)}
+              note={noteFor(toISODateString(selectedDate))}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label className="text-sm font-medium">
               {editingId ? "Edytuj aktywność" : "Dodaj aktywność"}
             </Label>
@@ -440,7 +454,7 @@ export function AddActivityModal({
 
           <div className="space-y-2">
             <Label htmlFor="notes" className="text-sm font-medium">
-              Notatka (opcjonalnie)
+              Notatka do aktywności (opcjonalnie)
             </Label>
             <Textarea
               id="notes"

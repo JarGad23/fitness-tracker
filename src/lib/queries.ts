@@ -7,6 +7,7 @@ import {
   exercises,
   workoutSets,
   coachReports,
+  dayNotes,
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, ne, desc, sql, inArray } from "drizzle-orm";
 import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
@@ -68,6 +69,26 @@ export async function getCachedHealthMetricsInRange(
       lte(healthMetrics.date, endDate)
     ),
     orderBy: (healthMetrics, { asc }) => [asc(healthMetrics.date)],
+  });
+}
+
+// Long stale is safe: saveDayNote calls updateTag("day-notes").
+export async function getCachedDayNotesInRange(
+  userId: string,
+  startDate: string,
+  endDate: string
+) {
+  "use cache";
+  cacheTag("day-notes");
+  cacheLife("hours");
+
+  return db.query.dayNotes.findMany({
+    where: and(
+      eq(dayNotes.userId, userId),
+      gte(dayNotes.date, startDate),
+      lte(dayNotes.date, endDate)
+    ),
+    orderBy: (dayNotes, { asc }) => [asc(dayNotes.date)],
   });
 }
 

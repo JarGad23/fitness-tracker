@@ -3,16 +3,25 @@ import { WeeklyProgress } from "@/components/weekly-progress";
 import { CalendarView } from "@/components/calendar-view";
 import { WeekNavigation } from "@/components/week-navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, TrendingUp, Target } from "lucide-react";
-import { getWeekRange, toISODateString } from "@/lib/utils";
+import { CalendarDays, TrendingUp, Target, NotebookPen } from "lucide-react";
+import {
+  getWeekRange,
+  toISODateString,
+  todayISO,
+  formatDayName,
+  formatDateDisplay,
+  capitalizeFirst,
+} from "@/lib/utils";
 import {
   getCachedActivityTypes,
   getCachedWorkoutsInRange,
   getCachedGymPrompts,
+  getCachedDayNotesInRange,
 } from "@/lib/queries";
 import { GymPrompts } from "@/components/gym-prompts";
+import { DayNoteEditor } from "@/components/day-note-editor";
 import { auth } from "@/lib/auth";
-import { startOfWeek, startOfMonth, endOfMonth, endOfWeek } from "date-fns";
+import { startOfWeek, startOfMonth, endOfMonth, endOfWeek, parseISO } from "date-fns";
 
 type SearchParams = Promise<{ week?: string }>;
 
@@ -131,6 +140,27 @@ async function WeekNav({ searchParams }: { searchParams: SearchParams }) {
   return <WeekNavigation weekDate={normalizedWeekDate} />;
 }
 
+async function TodayNoteSection() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+  const today = todayISO();
+  const [note] = await getCachedDayNotesInRange(userId, today, today);
+  const day = parseISO(today);
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {capitalizeFirst(formatDayName(day))}, {formatDateDisplay(day)}
+      </p>
+      <DayNoteEditor
+        key={today}
+        date={today}
+        note={note ? { tags: note.tags, text: note.text } : null}
+      />
+    </div>
+  );
+}
+
 async function CalendarSection({
   searchParams,
 }: {
@@ -139,16 +169,17 @@ async function CalendarSection({
   const { userId, normalizedWeekDate, monthGridStart, monthGridEnd } =
     await getContext(searchParams);
   if (!userId) return null;
-  const [activityTypes, workouts] = await getRangeData(
-    userId,
-    monthGridStart,
-    monthGridEnd
-  );
+  const [[activityTypes, workouts], dayNotes] = await Promise.all([
+    getRangeData(userId, monthGridStart, monthGridEnd),
+    getCachedDayNotesInRange(userId, monthGridStart, monthGridEnd),
+  ]);
   return (
     <CalendarView
       weekDate={normalizedWeekDate}
       activityTypes={activityTypes}
       workouts={workouts}
+      dayNotes={dayNotes.map((n) => ({ date: n.date, tags: n.tags, text: n.text }))}
+      notesRange={{ start: monthGridStart, end: monthGridEnd }}
     />
   );
 }
@@ -253,7 +284,7 @@ export default function DashboardPage({
         </div>
 
         {/* Progress Section */}
-        <div className="lg:col-span-1 mt-6 lg:mt-0">
+        <div className="lg:col-span-1 mt-6 lg:mt-0 space-y-6">
           <Card className="border-border/50 overflow-hidden h-fit">
             <CardHeader className="pb-2 border-b border-border/50 bg-muted/30">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -264,6 +295,20 @@ export default function DashboardPage({
             <CardContent className="p-4 lg:p-6">
               <Suspense fallback={<ProgressSkeleton />}>
                 <ProgressSection searchParams={searchParams} />
+              </Suspense>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 overflow-hidden h-fit">
+            <CardHeader className="pb-2 border-b border-border/50 bg-muted/30">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <NotebookPen className="w-5 h-5 text-muted-foreground" />
+                Jak minął dzień?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 lg:p-6">
+              <Suspense fallback={<div className="h-40 rounded-xl bg-muted/30 animate-pulse" />}>
+                <TodayNoteSection />
               </Suspense>
             </CardContent>
           </Card>

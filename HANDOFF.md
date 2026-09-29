@@ -1,7 +1,7 @@
 # Fitness Tracker — Handoff / Project Status
 
 > Single source of truth for picking up this project. Read this top-to-bottom before changing anything.
-> **Last updated:** 2026-09-29 — AI API for the local coach (`/api/ai/context`, `/api/ai/reports`)
+> **Last updated:** 2026-09-29 — day notes (tags + text) and the AI API for the local coach
 
 ---
 
@@ -92,6 +92,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
 | Local AI coach API (contract in §8) | `src/app/api/ai/context/route.ts`, `src/app/api/ai/reports/route.ts`, `src/lib/ai-context.ts` (pure JSON builder), `src/components/coach-report.tsx` |
 | Bearer auth for machine clients | `src/lib/api-auth.ts` |
+| Day notes: tags, editor, actions | `src/lib/day-notes.ts`, `src/components/day-note-editor.tsx`, `src/actions/day-notes.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
 | Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
@@ -105,7 +106,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 
 ## 7. Database
 
-Turso (libSQL). Seven tables.
+Turso (libSQL). Eight tables.
 
 - **users**: id, email, password_hash, created_at
 - **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, **health_kind** (`cycling` | `swimming` | `running` = auto-created from watch signals; `strength` = gym: sets logging + dashboard confirm prompt; null = manual), sort_order, created_at
@@ -115,8 +116,9 @@ Turso (libSQL). Seven tables.
 - **exercises**: id, user_id→users, name, created_at. Unique on (user_id, lower(name)) — SQLite `lower()` folds ASCII only, so the Polish case-insensitive match ("Łydki" = "ŁYDKI") is done in `addExercise` via `exerciseKey()`.
 - **workout_sets**: id, workout_id→workouts (cascade), exercise_id→exercises (cascade), position, reps, weight_kg (null = bodyweight, shown as "MC"), created_at. Exercise order in a workout = min(position) of its sets. Set ids are generated on the client (validated as UUID) so an optimistic set can be edited before the insert returns.
 - **coach_reports**: id, user_id→users (cascade), body (Markdown), model, period_start/period_end (ISO, nullable), targets (JSON `[{ name, targetPerWeek }]`, names stored in the user's spelling), applied_at (null = not applied), created_at. Index (user_id, created_at). Written only by `POST /api/ai/reports`; `applied_at` set by the "Zastosuj cele" action.
+- **day_notes**: id, user_id→users (cascade), date, tags (JSON array of keys from `DAY_TAGS`, stored in list order), text (≤ 500, nullable), created_at, updated_at. **Unique (user_id, date)**; a note with no tags and no text is deleted, never stored empty. Separate from `health_metrics.notes` on purpose: that row belongs to the webhook upsert, and a note must exist on days without watch data.
 
-Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`), `0007` (`coach_reports`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
+Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`), `0007` (`coach_reports`), `0008` (`day_notes`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
 
 **Migrations run through drizzle now:** `npm run db:generate` → review the SQL → `npm run db:migrate`. `__drizzle_migrations` was baselined on 2026-09-25 (all earlier migrations had been applied by hand); drizzle applies every journal entry whose `when` is newer than the last row there.
 
@@ -154,6 +156,12 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - `/ai-coach` shows the latest report above the Gemini export: body as plain text (no Markdown renderer), current → proposed targets, "Zastosuj cele" (`applyReportTargets`, one-shot: sets `applied_at`). Cache tag `coach-reports`.
 - The paste flow now reports unmatched activity names too (warning toast) — the silent skip from the old known gap is gone.
 
+**Day notes (2026-09-29):** context the data can't show (fever, a first mountain hike).
+- Quick tags (`DAY_TAGS` in `src/lib/day-notes.ts`: keys stored, Polish labels shown — only append, never remove a key) + optional text.
+- Entered in the "Jak minął dzień?" card on the dashboard (today in `Europe/Warsaw`, via `todayISO()`) and in the day modal (any day). Calendar shows a small notebook icon on days with a note.
+- `DayNoteEditor`: tags save on tap, text 800 ms after typing stops and on blur; saves are queued; server data is adopted only when idle and the text isn't mid-edit. A date outside the page's loaded range is fetched first (`loadDayNote`) so a save can't overwrite a note it never saw.
+- AI: `/api/ai/context` gets `day_notes`, `day_tag_legend` and per-week `day_tags` counts (additive, still `version: 1`); the Gemini export lists "Notatki dnia" per week and the prompt tells the coach to use them to explain outliers.
+
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"
 curl -X POST -H "Authorization: Bearer $AI_API_SECRET" -H 'Content-Type: application/json' \
@@ -174,7 +182,8 @@ curl -X POST -H "Authorization: Bearer $AI_API_SECRET" -H 'Content-Type: applica
    - Shortcuts **cannot read workouts**. Instead the payload carries workout-only signals (`cycling_km`, `swimming_m`, `running_speed`, plus `exercise_minutes`), stored per day in `health_metrics`. `detectWorkouts()` creates a `workouts` row with `source = "watch"` for the activity whose `activity_types.health_kind` matches — only when that day's signal **first crosses its threshold**, and only if the day has no workout of that activity yet. So re-sending the week never duplicates, and a workout the user deletes never comes back. Gym has no workout-only signal and stays manual.
 3. **Still unverified by a human:** feeling-score stars (save + reload on edit), and the full Gemini round-trip. Health data so far is **mock** (620 kcal / 54 bpm / 7.5 h) from the test script.
 4. ~~Known gap: renamed activities skipped silently~~ — fixed 2026-09-29 (paste flow warns, API returns 422).
-5. The AI's advice is only as good as the data — the export needs real logged workouts to be worth anything.
+5. **Known issue (pre-existing):** a JWT session outlives its user — after deleting a user, a browser still logged in as them sees an empty dashboard instead of being logged out (seen while testing with throwaway users). Low risk for a single-user app; fix = check the user exists in the `jwt`/`session` callback.
+6. The AI's advice is only as good as the data — the export needs real logged workouts to be worth anything.
 
 ---
 

@@ -86,3 +86,11 @@ export function isFutureDate(date: Date) {
 export function capitalizeFirst(text: string) {
   return text.charAt(0).toLocaleUpperCase("pl") + text.slice(1);
 }
+
+// Server code runs in UTC on Vercel; "today" for the user means Polish time.
+export const APP_TIME_ZONE = "Europe/Warsaw";
+
+export function todayISO(timeZone: string = APP_TIME_ZONE) {
+  // en-CA formats as YYYY-MM-DD
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+}

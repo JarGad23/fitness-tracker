@@ -12,7 +12,7 @@ import {
   format,
 } from "date-fns";
 import { pl } from "date-fns/locale";
-import { Plus } from "lucide-react";
+import { Plus, NotebookPen } from "lucide-react";
 
 import {
   cn,
@@ -28,6 +28,7 @@ import {
 import { durationLabel } from "@/lib/durations";
 import { AddActivityModal } from "./add-activity-modal";
 import type { ActivityType, Workout } from "@/lib/db/schema";
+import type { DayNoteValue } from "@/lib/day-notes";
 
 type WorkoutWithType = Workout & { activityType: ActivityType };
 
@@ -35,12 +36,17 @@ type CalendarViewProps = {
   weekDate: Date;
   activityTypes: ActivityType[];
   workouts: WorkoutWithType[];
+  dayNotes: (DayNoteValue & { date: string })[];
+  // The dates dayNotes covers; outside it a day's note is unknown, not empty.
+  notesRange: { start: string; end: string };
 };
 
 export function CalendarView({
   weekDate,
   activityTypes,
   workouts,
+  dayNotes,
+  notesRange,
 }: CalendarViewProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -51,6 +57,13 @@ export function CalendarView({
     byDay.set(workout.date, list);
   }
   const workoutsFor = (day: Date) => byDay.get(toISODateString(day)) ?? [];
+
+  const notesByDay = new Map(dayNotes.map((n) => [n.date, n]));
+  const hasNote = (day: Date) => notesByDay.has(toISODateString(day));
+  const noteFor = (date: string) =>
+    date >= notesRange.start && date <= notesRange.end
+      ? (notesByDay.get(date) ?? null)
+      : undefined;
 
   // Month grid (desktop): full weeks covering the current month.
   const gridStart = startOfWeek(startOfMonth(weekDate), { weekStartsOn: 1 });
@@ -123,7 +136,15 @@ export function CalendarView({
                         >
                           {day.getDate()}
                         </span>
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                        <span className="flex items-center gap-1">
+                          {hasNote(day) && (
+                            <NotebookPen
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              aria-label="Notatka dnia"
+                            />
+                          )}
+                          <Plus className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                        </span>
                       </div>
 
                       <div className="flex flex-col gap-1">
@@ -203,7 +224,7 @@ export function CalendarView({
                 >
                   {day.getDate()}
                 </span>
-                <div className="mt-2 flex flex-wrap justify-center gap-1">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
                   {dayWorkouts.slice(0, 4).map((workout) => {
                     const hex = resolveActivityColor(workout.activityType);
                     return (
@@ -218,6 +239,15 @@ export function CalendarView({
                       />
                     );
                   })}
+                  {hasNote(day) && (
+                    <NotebookPen
+                      className={cn(
+                        "h-3 w-3",
+                        today ? "text-white/90" : "text-muted-foreground"
+                      )}
+                      aria-label="Notatka dnia"
+                    />
+                  )}
                 </div>
               </button>
             );
@@ -287,6 +317,7 @@ export function CalendarView({
           dateString={toISODateString(selectedDate)}
           activityTypes={activityTypes}
           workouts={workouts}
+          noteFor={noteFor}
         />
       )}
     </>

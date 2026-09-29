@@ -5,12 +5,13 @@ import { users } from "@/lib/db/schema";
 import { checkBearer } from "@/lib/api-auth";
 import {
   getCachedActivityTypes,
+  getCachedDayNotesInRange,
   getCachedHealthMetricsInRange,
   getCachedLatestCoachReport,
   getCachedWorkoutsWithSetsInRange,
 } from "@/lib/queries";
 import { buildAIContext, contextWeekRanges, MAX_CONTEXT_WEEKS } from "@/lib/ai-context";
-import { toISODateString } from "@/lib/utils";
+import { todayISO } from "@/lib/utils";
 
 // Read side of the local AI coach contract: the last N weeks as JSON.
 // GET /api/ai/context?user_email=…&weeks=4&today=YYYY-MM-DD, bearer AI_API_SECRET.
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
   if (todayParam != null && !DATE_RE.test(todayParam)) {
     return NextResponse.json({ error: "today must be YYYY-MM-DD" }, { status: 400 });
   }
-  const today = todayParam ?? toISODateString(new Date());
+  const today = todayParam ?? todayISO();
 
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!user) {
@@ -53,14 +54,23 @@ export async function GET(request: Request) {
   const start = ranges[0].start;
   const end = ranges[ranges.length - 1].end;
 
-  const [activityTypes, workouts, healthMetrics, latestReport] = await Promise.all([
+  const [activityTypes, workouts, healthMetrics, dayNotes, latestReport] = await Promise.all([
     getCachedActivityTypes(user.id),
     getCachedWorkoutsWithSetsInRange(user.id, start, end),
     getCachedHealthMetricsInRange(user.id, start, end),
+    getCachedDayNotesInRange(user.id, start, end),
     getCachedLatestCoachReport(user.id),
   ]);
 
   return NextResponse.json(
-    buildAIContext({ today, weeks, activityTypes, workouts, healthMetrics, latestReport })
+    buildAIContext({
+      today,
+      weeks,
+      activityTypes,
+      workouts,
+      healthMetrics,
+      dayNotes,
+      latestReport,
+    })
   );
 }

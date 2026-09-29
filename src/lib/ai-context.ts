@@ -3,7 +3,8 @@
 // models are unreliable at arithmetic, so they get ready numbers next to the raw rows.
 
 import { parseISO, subWeeks } from "date-fns";
-import type { ActivityType, CoachReport, HealthMetric, Workout } from "@/lib/db/schema";
+import type { ActivityType, CoachReport, DayNote, HealthMetric, Workout } from "@/lib/db/schema";
+import { DAY_TAGS } from "@/lib/day-notes";
 import { avg } from "@/lib/ai-sync";
 import { groupSetsByExercise, type SetWithExercise } from "@/lib/gym";
 import { getWeekRange, toISODateString } from "@/lib/utils";
@@ -36,15 +37,21 @@ export function buildAIContext(input: {
   activityTypes: ActivityType[];
   workouts: WorkoutWithSets[];
   healthMetrics: HealthMetric[];
+  dayNotes: DayNote[];
   latestReport: CoachReport | null;
 }) {
-  const { today, activityTypes, workouts, healthMetrics, latestReport } = input;
+  const { today, activityTypes, workouts, healthMetrics, dayNotes, latestReport } = input;
   const ranges = contextWeekRanges(today, input.weeks);
 
   const weeks = ranges.map(({ start, end }, i) => {
     const weekWorkouts = workouts.filter((w) => w.date >= start && w.date <= end);
     const weekHealth = healthMetrics.filter((h) => h.date >= start && h.date <= end);
     const exerciseMinutes = present(weekHealth.map((h) => h.exerciseMinutes));
+    const dayTags: Record<string, number> = {};
+    for (const note of dayNotes) {
+      if (note.date < start || note.date > end) continue;
+      for (const tag of note.tags) dayTags[tag] = (dayTags[tag] ?? 0) + 1;
+    }
 
     return {
       start,
@@ -67,6 +74,8 @@ export function buildAIContext(input: {
         exercise_minutes_total:
           exerciseMinutes.length > 0 ? exerciseMinutes.reduce((a, b) => a + b, 0) : null,
       },
+      // Days per tag this week, e.g. { sick: 2 } (see day_tag_legend)
+      day_tags: dayTags,
     };
   });
 
@@ -107,6 +116,10 @@ export function buildAIContext(input: {
       swimming_m: h.swimmingM,
       running_speed_kmh: h.runningSpeedKmh,
     })),
+    // The user's own context for a day (illness, a hike outside the plan...). Tags are
+    // keys from day_tag_legend.
+    day_tag_legend: Object.fromEntries(DAY_TAGS.map((t) => [t.key, t.label])),
+    day_notes: dayNotes.map((n) => ({ date: n.date, tags: n.tags, text: n.text })),
     latest_report: latestReport
       ? {
           id: latestReport.id,

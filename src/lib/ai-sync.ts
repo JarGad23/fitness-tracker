@@ -2,7 +2,9 @@
 // Markdown brief to paste into an external AI coach (Gemini), and parse the JSON
 // the coach returns back into target updates. No DB / server code here.
 
-import type { ActivityType, Workout, HealthMetric } from "@/lib/db/schema";
+import { parseISO } from "date-fns";
+import type { ActivityType, Workout, HealthMetric, DayNote } from "@/lib/db/schema";
+import { dayTagLabel } from "@/lib/day-notes";
 import {
   getWeekRange,
   getWeekNumber,
@@ -25,6 +27,7 @@ function buildWeekSection(
   activityTypes: ActivityType[],
   workouts: WorkoutRow[],
   healthMetrics: HealthMetric[],
+  dayNotes: DayNote[],
   start: string,
   end: string
 ): string {
@@ -65,6 +68,16 @@ function buildWeekSection(
     if (sleep != null) lines.push(`- Sen: ${sleep.toFixed(1)} h`);
   }
 
+  const weekNotes = dayNotes.filter((n) => n.date >= start && n.date <= end);
+  if (weekNotes.length > 0) {
+    lines.push("", "**Notatki dnia:**");
+    for (const note of weekNotes) {
+      const tags = note.tags.map(dayTagLabel).join(", ");
+      const details = [tags, note.text].filter(Boolean).join(": ");
+      lines.push(`- ${formatDateDisplay(parseISO(note.date))} — ${details}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -76,6 +89,7 @@ export function buildCoachMarkdown(
   activityTypes: ActivityType[],
   workouts: WorkoutRow[],
   healthMetrics: HealthMetric[],
+  dayNotes: DayNote[],
   now: Date = new Date()
 ): string {
   const prev = getPreviousWeek(now);
@@ -106,6 +120,7 @@ export function buildCoachMarkdown(
       activityTypes,
       workouts,
       healthMetrics,
+      dayNotes,
       prevStart,
       prevEnd
     ),
@@ -115,6 +130,7 @@ export function buildCoachMarkdown(
       activityTypes,
       workouts,
       healthMetrics,
+      dayNotes,
       curStart,
       curEnd
     ),
@@ -127,8 +143,9 @@ export function buildCoachMarkdown(
     "",
     "1. **Ocena tygodnia** — co poszło dobrze, a co słabo (2–3 zdania).",
     "2. **Trend** — porównaj bieżący tydzień z poprzednim.",
-    "3. **Samopoczucie i regeneracja** — wnioski z ocen samopoczucia (1–5), snu i tętna",
-    "   spoczynkowego. Pomiń ten punkt, jeśli danych brak.",
+    "3. **Samopoczucie i regeneracja** — wnioski z ocen samopoczucia (1–5), snu, tętna",
+    "   spoczynkowego i notatek dnia (choroba, wysiłek poza planem itp. tłumaczą odchylenia",
+    "   w danych). Pomiń ten punkt, jeśli danych brak.",
     "4. **Rekomendacje** — 3 konkretne rady na nadchodzący tydzień.",
     "5. **Uzasadnienie celów** — dlaczego proponujesz właśnie takie liczby.",
     "",

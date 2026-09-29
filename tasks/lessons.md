@@ -45,3 +45,19 @@
 **Better:** Check `innerWidth` right after resizing. If it didn't change, load the page in a
 same-origin `<iframe style="width:390px">`, then measure `contentDocument.documentElement.scrollWidth`
 and card rects, and zoom-screenshot the iframe region.
+
+### Autosaving editors vs server refresh
+**Avoid:** Syncing an editor's local state from server props on every change. After
+`updateTag`, the refreshed prop reflects the *first* save while later taps/typing are
+still local → they get wiped. Reading state in a handler (`tags.includes`) also goes stale
+when several events fire before a re-render.
+**Better:** Adopt server data only when no save is pending and the text isn't dirty;
+queue saves; keep the latest values in a ref updated in handlers. Don't rely on blur
+alone to save text on mobile — debounce it.
+
+### Focus events don't fire in a background automation tab
+**Avoid:** Testing blur-to-save with `el.focus()` / `el.blur()` from Claude-in-Chrome —
+`document.hasFocus()` is false, no focus events fire, and it looks like the save is broken.
+**Better:** Dispatch `new FocusEvent('focusout', { bubbles: true })` (what React's
+`onBlur` listens to), and wait for streamed sections by polling for a specific selector
+(`textarea[aria-label=…]`), not a generic card lookup.

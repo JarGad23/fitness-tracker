@@ -5,6 +5,7 @@ import {
   getCachedWorkoutsInRange,
   getCachedHealthMetricsInRange,
   getCachedLatestCoachReport,
+  getCachedDayNotesInRange,
 } from "@/lib/queries";
 import { buildCoachMarkdown, type WorkoutRow } from "@/lib/ai-sync";
 import { getWeekRange, getPreviousWeek, toISODateString } from "@/lib/utils";
@@ -21,16 +22,18 @@ async function AiCoachData() {
   const start = toISODateString(getWeekRange(getPreviousWeek(now)).start);
   const end = toISODateString(getWeekRange(now).end);
 
-  const [activityTypes, workouts, healthMetrics] = await Promise.all([
+  const [activityTypes, workouts, healthMetrics, dayNotes] = await Promise.all([
     getCachedActivityTypes(userId),
     getCachedWorkoutsInRange(userId, start, end),
     getCachedHealthMetricsInRange(userId, start, end),
+    getCachedDayNotesInRange(userId, start, end),
   ]);
 
   const markdown = buildCoachMarkdown(
     activityTypes,
     workouts as WorkoutRow[],
     healthMetrics,
+    dayNotes,
     now
   );
 

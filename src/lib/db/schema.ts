@@ -155,6 +155,29 @@ export const coachReports = sqliteTable(
   (table) => [index("coach_reports_user_created_idx").on(table.userId, table.createdAt)]
 );
 
+// User-written context for a day ("fever", "first mountain hike"), for the AI coach.
+// Tags are stable keys from src/lib/day-notes.ts. One row per user per day; a note
+// with no tags and no text is deleted rather than stored empty.
+export const dayNotes = sqliteTable(
+  "day_notes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // ISO date string "2026-06-01"
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull(),
+    text: text("text"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex("day_notes_user_date_unique").on(table.userId, table.date)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
@@ -162,6 +185,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   healthMetrics: many(healthMetrics),
   exercises: many(exercises),
   coachReports: many(coachReports),
+  dayNotes: many(dayNotes),
 }));
 
 export const activityTypesRelations = relations(activityTypes, ({ one, many }) => ({
@@ -211,6 +235,10 @@ export const coachReportsRelations = relations(coachReports, ({ one }) => ({
   user: one(users, { fields: [coachReports.userId], references: [users.id] }),
 }));
 
+export const dayNotesRelations = relations(dayNotes, ({ one }) => ({
+  user: one(users, { fields: [dayNotes.userId], references: [users.id] }),
+}));
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -223,3 +251,4 @@ export type NewHealthMetric = typeof healthMetrics.$inferInsert;
 export type Exercise = typeof exercises.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
 export type CoachReport = typeof coachReports.$inferSelect;
+export type DayNote = typeof dayNotes.$inferSelect;
