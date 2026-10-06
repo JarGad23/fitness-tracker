@@ -36,13 +36,15 @@ import {
   Star,
   X,
   ListChecks,
+  Plus,
+  Moon,
+  HeartPulse,
+  Activity,
+  Flame,
 } from "lucide-react";
-import {
-  cn,
-  formatDayName,
-  formatDateDisplay,
-  toISODateString,
-} from "@/lib/utils";
+import { format } from "date-fns";
+import { pl } from "date-fns/locale";
+import { cn, capitalizeFirst, toISODateString } from "@/lib/utils";
 import { getActivityIcon } from "@/lib/activity-icons";
 import {
   resolveActivityColor,
@@ -56,6 +58,15 @@ import { DayNoteEditor } from "./day-note-editor";
 
 type WorkoutWithType = Workout & { activityType: ActivityType };
 
+/** One day of Apple Watch data, as shown in the modal's strip. */
+export type DayHealth = {
+  date: string;
+  sleepHours: number | null;
+  restingHr: number | null;
+  exerciseMinutes: number | null;
+  activeCalories: number | null;
+};
+
 type AddActivityModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -65,6 +76,8 @@ type AddActivityModalProps = {
   workouts?: WorkoutWithType[];
   // null = the day has no note, undefined = not loaded (the editor fetches it)
   noteFor: (date: string) => DayNoteValue | null | undefined;
+  // null = no watch data for that day (or a date outside the loaded range)
+  healthFor: (date: string) => DayHealth | null;
 };
 
 export function AddActivityModal({
@@ -75,6 +88,7 @@ export function AddActivityModal({
   activityTypes,
   workouts = [],
   noteFor,
+  healthFor,
 }: AddActivityModalProps) {
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(date);
@@ -87,6 +101,8 @@ export function AddActivityModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Phones only: the workout form is collapsed until asked for (always shown on md+).
+  const [formOpen, setFormOpen] = useState(false);
   const router = useRouter();
 
   // Strength workouts get their sets logged on their own page.
@@ -112,6 +128,7 @@ export function AddActivityModal({
     setFeelingScore(null);
     setNotes("");
     setEditingId(null);
+    setFormOpen(false);
   };
 
   const startEditing = (workout: WorkoutWithType) => {
@@ -183,22 +200,24 @@ export function AddActivityModal({
     resetState();
   };
 
+  const dateISO = toISODateString(selectedDate);
+  const health = healthFor(dateISO);
+  const showForm = formOpen || editingId !== null;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md rounded-3xl p-6 max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Aktywności</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5 py-2">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Data</Label>
+      <DialogContent className="max-w-[calc(100%-1rem)] sm:max-w-3xl rounded-3xl p-5 sm:p-7 max-h-[92dvh] overflow-y-auto gap-5">
+        <DialogHeader className="pr-8">
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-xl">
+              {capitalizeFirst(format(selectedDate, "EEEE, d MMMM", { locale: pl }))}
+            </DialogTitle>
             <Popover open={dateOpen} onOpenChange={setDateOpen}>
-              <PopoverTrigger className="flex h-12 w-full items-center gap-3 rounded-xl border border-input bg-card px-4 text-left text-sm font-medium transition-colors hover:bg-muted aria-expanded:bg-muted">
-                <CalendarIcon className="w-5 h-5 text-muted-foreground shrink-0" />
-                <span className="capitalize">
-                  {formatDayName(selectedDate)}, {formatDateDisplay(selectedDate)}
-                </span>
+              <PopoverTrigger
+                aria-label="Zmień dzień"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground aria-expanded:bg-muted"
+              >
+                <CalendarIcon className="w-4 h-4" />
               </PopoverTrigger>
               <PopoverContent align="start">
                 <Calendar
@@ -215,133 +234,158 @@ export function AddActivityModal({
               </PopoverContent>
             </Popover>
           </div>
+        </DialogHeader>
 
-          {dayWorkouts.length > 0 && (
+        {health && <DayHealthStrip health={health} />}
+
+        <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+          <section className="space-y-5 min-w-0">
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Dodane aktywności</Label>
-              <div className="space-y-2">
-                {dayWorkouts.map((workout) => {
-                  const Icon = getActivityIcon(workout.activityType.icon);
-                  const hex = resolveActivityColor(workout.activityType);
-                  const styles = activityColorStyles(hex);
-                  const isDeleting = deletingId === workout.id;
-                  const dur = durationLabel(workout.duration);
-                  const hasNotes = Boolean(workout.notes);
-                  const isExpanded = expandedId === workout.id;
-                  const isEditing = editingId === workout.id;
+              <h3 className="text-sm font-semibold">Aktywności</h3>
+              {dayWorkouts.length > 0 ? (
+                <div className="space-y-2">
+                  {dayWorkouts.map((workout) => {
+                    const Icon = getActivityIcon(workout.activityType.icon);
+                    const hex = resolveActivityColor(workout.activityType);
+                    const styles = activityColorStyles(hex);
+                    const isDeleting = deletingId === workout.id;
+                    const dur = durationLabel(workout.duration);
+                    const hasNotes = Boolean(workout.notes);
+                    const isExpanded = expandedId === workout.id;
+                    const isEditing = editingId === workout.id;
 
-                  return (
-                    <div
-                      key={workout.id}
-                      className={cn(
-                        "rounded-xl border border-border bg-card",
-                        isEditing && "ring-2 ring-primary/50"
-                      )}
-                    >
-                      <div className="flex items-center gap-3 p-3">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                          style={styles.soft}
-                        >
-                          <Icon className="w-4 h-4" style={styles.text} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">
-                            {workout.activityType.name}
-                          </p>
-                          {dur && (
-                            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="w-3 h-3" />
-                              {dur}
-                            </span>
+                    return (
+                      <div
+                        key={workout.id}
+                        className={cn(
+                          "rounded-xl border border-border bg-card",
+                          isEditing && "ring-2 ring-primary/50"
+                        )}
+                      >
+                        <div className="flex items-center gap-3 p-3">
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                            style={styles.soft}
+                          >
+                            <Icon className="w-4 h-4" style={styles.text} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {workout.activityType.name}
+                            </p>
+                            {dur && (
+                              <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {dur}
+                              </span>
+                            )}
+                          </div>
+                          {hasNotes && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() =>
+                                setExpandedId(isExpanded ? null : workout.id)
+                              }
+                              aria-label={
+                                isExpanded ? "Ukryj notatkę" : "Pokaż notatkę"
+                              }
+                              aria-expanded={isExpanded}
+                              className="text-muted-foreground"
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "w-4 h-4 transition-transform",
+                                  isExpanded && "rotate-180"
+                                )}
+                              />
+                            </Button>
                           )}
-                        </div>
-                        {hasNotes && (
+                          {workout.activityType.healthKind === "strength" && (
+                            <Link
+                              href={`/trening/${workout.id}`}
+                              aria-label="Serie"
+                              className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-primary"
+                            >
+                              <ListChecks className="w-4 h-4" />
+                            </Link>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() =>
-                              setExpandedId(isExpanded ? null : workout.id)
-                            }
-                            aria-label={
-                              isExpanded ? "Ukryj notatkę" : "Pokaż notatkę"
-                            }
-                            aria-expanded={isExpanded}
-                            className="text-muted-foreground"
+                            onClick={() => startEditing(workout)}
+                            disabled={isDeleting}
+                            aria-label="Edytuj aktywność"
+                            className={cn(
+                              "text-muted-foreground hover:text-primary",
+                              isEditing && "text-primary"
+                            )}
                           >
-                            <ChevronDown
-                              className={cn(
-                                "w-4 h-4 transition-transform",
-                                isExpanded && "rotate-180"
-                              )}
-                            />
+                            <Pencil className="w-4 h-4" />
                           </Button>
-                        )}
-                        {workout.activityType.healthKind === "strength" && (
-                          <Link
-                            href={`/trening/${workout.id}`}
-                            aria-label="Serie"
-                            className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-primary"
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => handleDelete(workout.id)}
+                            disabled={isDeleting}
+                            aria-label="Usuń aktywność"
+                            className="text-muted-foreground hover:text-destructive"
                           >
-                            <ListChecks className="w-4 h-4" />
-                          </Link>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => startEditing(workout)}
-                          disabled={isDeleting}
-                          aria-label="Edytuj aktywność"
-                          className={cn(
-                            "text-muted-foreground hover:text-primary",
-                            isEditing && "text-primary"
-                          )}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleDelete(workout.id)}
-                          disabled={isDeleting}
-                          aria-label="Usuń aktywność"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          {isDeleting ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                      {hasNotes && isExpanded && (
-                        <div className="flex gap-2 border-t border-border px-3 py-2.5 text-sm text-muted-foreground">
-                          <StickyNote className="w-4 h-4 shrink-0 mt-0.5" />
-                          <p className="whitespace-pre-wrap break-words">
-                            {workout.notes}
-                          </p>
+                            {isDeleting ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </Button>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                        {hasNotes && isExpanded && (
+                          <div className="flex gap-2 border-t border-border px-3 py-2.5 text-sm text-muted-foreground">
+                            <StickyNote className="w-4 h-4 shrink-0 mt-0.5" />
+                            <p className="whitespace-pre-wrap break-words">
+                              {workout.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Brak treningów tego dnia.</p>
+              )}
             </div>
-          )}
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Jak minął dzień?</Label>
-            <DayNoteEditor
-              key={toISODateString(selectedDate)}
-              date={toISODateString(selectedDate)}
-              note={noteFor(toISODateString(selectedDate))}
-            />
-          </div>
+            <div className="space-y-2">
+              <div>
+                <h3 className="text-sm font-semibold">Jak minął dzień?</h3>
+                <p className="text-xs text-muted-foreground">
+                  Zapisuje się samo — nie musisz wybierać treningu.
+                </p>
+              </div>
+              <DayNoteEditor key={dateISO} date={dateISO} note={noteFor(dateISO)} />
+            </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              {editingId ? "Edytuj aktywność" : "Dodaj aktywność"}
-            </Label>
+            {!showForm && (
+              <Button
+                variant="outline"
+                onClick={() => setFormOpen(true)}
+                className="w-full h-12 rounded-xl md:hidden"
+              >
+                <Plus />
+                Dodaj trening
+              </Button>
+            )}
+          </section>
+
+          <section
+            className={cn(
+              "space-y-5 min-w-0 md:border-l md:border-border md:pl-8",
+              !showForm && "hidden md:block"
+            )}
+          >
+            <h3 className="text-sm font-semibold">
+              {editingId ? "Edytuj trening" : "Dodaj trening"}
+            </h3>
             <div className="grid grid-cols-2 gap-3">
               {activityTypes.map((activity) => {
                 const Icon = getActivityIcon(activity.icon);
@@ -382,127 +426,147 @@ export function AddActivityModal({
                 );
               })}
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Czas trwania (opcjonalnie)
-            </Label>
-            <Select
-              value={duration}
-              onValueChange={(value) => setDuration(value)}
-            >
-              <SelectTrigger>
-                {duration ? (
-                  <span className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-muted-foreground" />
-                    {durationLabel(duration)}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    Wybierz czas trwania
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Czas trwania (opcjonalnie)
+              </Label>
+              <Select
+                value={duration}
+                onValueChange={(value) => setDuration(value)}
+              >
+                <SelectTrigger>
+                  {duration ? (
+                    <span className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      {durationLabel(duration)}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4" />
+                      Wybierz czas trwania
+                    </span>
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Samopoczucie (opcjonalnie)
+              </Label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map((score) => {
+                  const active = feelingScore !== null && score <= feelingScore;
+                  return (
+                    <button
+                      key={score}
+                      type="button"
+                      onClick={() =>
+                        setFeelingScore(feelingScore === score ? null : score)
+                      }
+                      aria-label={`Samopoczucie ${score} z 5`}
+                      aria-pressed={active}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-input bg-card transition-colors hover:bg-muted"
+                    >
+                      <Star
+                        className={cn(
+                          "w-5 h-5 transition-colors",
+                          active
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground"
+                        )}
+                      />
+                    </button>
+                  );
+                })}
+                {feelingScore !== null && (
+                  <span className="ml-1 text-sm text-muted-foreground">
+                    {feelingScore}/5
                   </span>
                 )}
-              </SelectTrigger>
-              <SelectContent>
-                {DURATION_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Samopoczucie (opcjonalnie)
-            </Label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((score) => {
-                const active = feelingScore !== null && score <= feelingScore;
-                return (
-                  <button
-                    key={score}
-                    type="button"
-                    onClick={() =>
-                      setFeelingScore(feelingScore === score ? null : score)
-                    }
-                    aria-label={`Samopoczucie ${score} z 5`}
-                    aria-pressed={active}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-input bg-card transition-colors hover:bg-muted"
-                  >
-                    <Star
-                      className={cn(
-                        "w-5 h-5 transition-colors",
-                        active
-                          ? "fill-yellow-400 text-yellow-400"
-                          : "text-muted-foreground"
-                      )}
-                    />
-                  </button>
-                );
-              })}
-              {feelingScore !== null && (
-                <span className="ml-1 text-sm text-muted-foreground">
-                  {feelingScore}/5
-                </span>
-              )}
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="text-sm font-medium">
-              Notatka do aktywności (opcjonalnie)
-            </Label>
-            <Textarea
-              id="notes"
-              placeholder="np. Dzień nóg, bieganie w deszczu..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
-          </div>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes" className="text-sm font-medium">
+                Notatka do aktywności (opcjonalnie)
+              </Label>
+              <Textarea
+                id="notes"
+                placeholder="np. Dzień nóg, bieganie w deszczu..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
 
-        <div className="flex gap-3 pt-2">
-          {editingId ? (
-            <Button
-              variant="outline"
-              onClick={resetState}
-              disabled={isPending}
-              className="flex-1 h-12 rounded-xl"
-            >
-              <X className="w-4 h-4" />
-              Anuluj
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1 h-12 rounded-xl"
-            >
-              Zamknij
-            </Button>
-          )}
-          <Button
-            onClick={handleSubmit}
-            disabled={!selectedActivity || isPending}
-            className="flex-[2] h-12 rounded-xl"
-          >
-            {isPending
-              ? editingId
-                ? "Zapisywanie..."
-                : "Dodawanie..."
-              : editingId
-                ? "Zapisz"
-                : startsStrengthWorkout
-                  ? "Rozpocznij trening"
-                  : "Dodaj"}
-          </Button>
+            <div className="flex gap-3">
+              {showForm && (
+                <Button
+                  variant="outline"
+                  onClick={resetState}
+                  disabled={isPending}
+                  className="flex-1 h-12 rounded-xl"
+                >
+                  <X className="w-4 h-4" />
+                  Anuluj
+                </Button>
+              )}
+              <Button
+                onClick={handleSubmit}
+                disabled={!selectedActivity || isPending}
+                className="flex-[2] h-12 rounded-xl"
+              >
+                {isPending
+                  ? editingId
+                    ? "Zapisywanie..."
+                    : "Dodawanie..."
+                  : editingId
+                    ? "Zapisz"
+                    : startsStrengthWorkout
+                      ? "Rozpocznij trening"
+                      : "Dodaj"}
+              </Button>
+            </div>
+          </section>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const HEALTH_TILES = [
+  { key: "sleepHours", label: "Sen", icon: Moon, format: (v: number) => `${v.toLocaleString("pl-PL", { maximumFractionDigits: 1 })} h` },
+  { key: "restingHr", label: "Tętno spocz.", icon: HeartPulse, format: (v: number) => `${v} bpm` },
+  { key: "exerciseMinutes", label: "Ruch", icon: Activity, format: (v: number) => `${v} min` },
+  { key: "activeCalories", label: "Kalorie", icon: Flame, format: (v: number) => `${v} kcal` },
+] as const;
+
+function DayHealthStrip({ health }: { health: DayHealth }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Dane z Apple Watch">
+      {HEALTH_TILES.map(({ key, label, icon: Icon, format }) => {
+        const value = health[key];
+        return (
+          <div key={key} className="rounded-xl bg-muted/50 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </p>
+            <p className="mt-0.5 text-base font-semibold tabular-nums">
+              {value == null ? "—" : format(value)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
   );
 }

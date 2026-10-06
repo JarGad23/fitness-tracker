@@ -26,7 +26,7 @@ import {
   activityColorStyles,
 } from "@/lib/activity-colors";
 import { durationLabel } from "@/lib/durations";
-import { AddActivityModal } from "./add-activity-modal";
+import { AddActivityModal, type DayHealth } from "./add-activity-modal";
 import type { ActivityType, Workout } from "@/lib/db/schema";
 import type { DayNoteValue } from "@/lib/day-notes";
 
@@ -39,6 +39,7 @@ type CalendarViewProps = {
   dayNotes: (DayNoteValue & { date: string })[];
   // The dates dayNotes covers; outside it a day's note is unknown, not empty.
   notesRange: { start: string; end: string };
+  healthDays: DayHealth[];
 };
 
 export function CalendarView({
@@ -47,6 +48,7 @@ export function CalendarView({
   workouts,
   dayNotes,
   notesRange,
+  healthDays,
 }: CalendarViewProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -64,6 +66,8 @@ export function CalendarView({
     date >= notesRange.start && date <= notesRange.end
       ? (notesByDay.get(date) ?? null)
       : undefined;
+
+  const healthByDay = new Map(healthDays.map((h) => [h.date, h]));
 
   // Month grid (desktop): full weeks covering the current month.
   const gridStart = startOfWeek(startOfMonth(weekDate), { weekStartsOn: 1 });
@@ -318,6 +322,7 @@ export function CalendarView({
           activityTypes={activityTypes}
           workouts={workouts}
           noteFor={noteFor}
+          healthFor={(date) => healthByDay.get(date) ?? null}
         />
       )}
     </>

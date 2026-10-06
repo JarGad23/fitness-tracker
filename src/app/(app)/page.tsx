@@ -17,6 +17,7 @@ import {
   getCachedWorkoutsInRange,
   getCachedGymPrompts,
   getCachedDayNotesInRange,
+  getCachedHealthMetricsInRange,
 } from "@/lib/queries";
 import { GymPrompts } from "@/components/gym-prompts";
 import { DayNoteEditor } from "@/components/day-note-editor";
@@ -169,9 +170,10 @@ async function CalendarSection({
   const { userId, normalizedWeekDate, monthGridStart, monthGridEnd } =
     await getContext(searchParams);
   if (!userId) return null;
-  const [[activityTypes, workouts], dayNotes] = await Promise.all([
+  const [[activityTypes, workouts], dayNotes, healthDays] = await Promise.all([
     getRangeData(userId, monthGridStart, monthGridEnd),
     getCachedDayNotesInRange(userId, monthGridStart, monthGridEnd),
+    getCachedHealthMetricsInRange(userId, monthGridStart, monthGridEnd),
   ]);
   return (
     <CalendarView
@@ -180,6 +182,13 @@ async function CalendarSection({
       workouts={workouts}
       dayNotes={dayNotes.map((n) => ({ date: n.date, tags: n.tags, text: n.text }))}
       notesRange={{ start: monthGridStart, end: monthGridEnd }}
+      healthDays={healthDays.map((h) => ({
+        date: h.date,
+        sleepHours: h.sleepHours,
+        restingHr: h.restingHr,
+        exerciseMinutes: h.exerciseMinutes,
+        activeCalories: h.activeCalories,
+      }))}
     />
   );
 }

@@ -61,3 +61,10 @@ alone to save text on mobile — debounce it.
 **Better:** Dispatch `new FocusEvent('focusout', { bubbles: true })` (what React's
 `onBlur` listens to), and wait for streamed sections by polling for a specific selector
 (`textarea[aria-label=…]`), not a generic card lookup.
+
+### Throwaway users leave a live session behind
+**Avoid:** Deleting a throwaway user while the browser is still logged in as them. The JWT
+outlives the user (HANDOFF known issue), so the next `/register` silently redirects to `/`
+and the "new" user is never created — seeding then fails with no row.
+**Better:** Click "Wyloguj" before deleting a test user. Seed rows *before* the first page
+load or restart `npm run dev` afterwards — direct DB inserts don't invalidate `"use cache"` tags.

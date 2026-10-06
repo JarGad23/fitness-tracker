@@ -1,3 +1,15 @@
+# Day modal redesign (2026-10-06)
+
+Jarek thought a day note needed one of the 4 activities picked ("Dodaj" disabled) — the
+note always autosaved, but sat inside the workout form. Modal also felt cramped.
+
+- [x] Header = full date + small date-picker trigger; bottom "Zamknij" removed (X closes)
+- [x] Watch strip: sen / tętno spocz. / ruch / kalorie from `health_metrics` (month-grid range)
+- [x] Left column: activities + "Jak minął dzień?" ("Zapisuje się samo…"); right: workout form
+      with its own submit; phones: form behind "+ Dodaj trening", auto-opens on edit
+- [x] Verify: tsc, lint; throwaway user desktop + 390 px: note saves with no activity picked
+      and reloads, add collapses the form, edit opens it, no horizontal scroll; user deleted
+
 # Gym prompt fixes (2026-10-06)
 
 Found on real data: hike/zoo days answered "Nie" lost the info; "Tak" felt slow; an empty

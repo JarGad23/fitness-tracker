@@ -131,7 +131,7 @@ export function DayNoteEditor({ date, note }: { date: string; note: DayNoteValue
       </div>
       <Textarea
         aria-label="Notatka dnia"
-        placeholder="Co jeszcze warto wiedzieć? np. gorączka, pierwsze góry ~6 h"
+        placeholder="np. wyprawa w góry, spacer po zoo, gorączka"
         value={text}
         disabled={!loaded}
         maxLength={DAY_NOTE_MAX_LENGTH}
