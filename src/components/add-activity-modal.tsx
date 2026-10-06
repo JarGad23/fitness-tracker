@@ -543,8 +543,16 @@ export function AddActivityModal({
   );
 }
 
+// 6.8 → "6 h 48 min", 7 → "7 h"
+function formatSleep(hours: number) {
+  const total = Math.round(hours * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
 const HEALTH_TILES = [
-  { key: "sleepHours", label: "Sen", icon: Moon, format: (v: number) => `${v.toLocaleString("pl-PL", { maximumFractionDigits: 1 })} h` },
+  { key: "sleepHours", label: "Sen", icon: Moon, format: formatSleep },
   { key: "restingHr", label: "Tętno spocz.", icon: HeartPulse, format: (v: number) => `${v} bpm` },
   { key: "exerciseMinutes", label: "Ruch", icon: Activity, format: (v: number) => `${v} min` },
   { key: "activeCalories", label: "Kalorie", icon: Flame, format: (v: number) => `${v} kcal` },

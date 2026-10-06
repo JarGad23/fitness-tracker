@@ -36,6 +36,11 @@ import {
 } from "@/actions/activity-types";
 import type { ActivityType } from "@/lib/db/schema";
 
+// Empty or garbage falls back to 0 ("bez celu"), not to a goal the user didn't type.
+function clampTarget(raw: string) {
+  return Math.min(14, Math.max(0, parseInt(raw, 10) || 0));
+}
+
 function ActivityTypeForm({
   activityType,
   onClose,
@@ -47,7 +52,7 @@ function ActivityTypeForm({
   const [isPending, setIsPending] = useState(false);
   const [name, setName] = useState(activityType?.name ?? "");
   // Keep the target as a raw string so the field can be cleared and retyped
-  // freely; it is parsed and clamped to 1–14 on submit.
+  // freely; it is parsed and clamped to 0–14 on submit (0 = no goal).
   const [target, setTarget] = useState(
     String(activityType?.targetPerWeek ?? 3),
   );
@@ -63,7 +68,7 @@ function ActivityTypeForm({
       return;
     }
 
-    const targetNum = Math.min(14, Math.max(1, parseInt(target, 10) || 1));
+    const targetNum = clampTarget(target);
 
     setIsPending(true);
     const formData = new FormData();
@@ -108,7 +113,7 @@ function ActivityTypeForm({
             {name.trim() || "Nazwa aktywności"}
           </p>
           <p className="text-sm text-muted-foreground">
-            {parseInt(target, 10) || 0}x / tydzień
+            {clampTarget(target) > 0 ? `${clampTarget(target)}x / tydzień` : "bez celu"}
           </p>
         </div>
       </div>
@@ -138,15 +143,14 @@ function ActivityTypeForm({
           maxLength={2}
           value={target}
           onChange={(e) => setTarget(e.target.value.replace(/\D/g, ""))}
-          onBlur={() =>
-            setTarget((t) =>
-              String(Math.min(14, Math.max(1, parseInt(t, 10) || 1))),
-            )
-          }
+          onBlur={() => setTarget((t) => String(clampTarget(t)))}
           placeholder="np. 3"
           required
           className="h-12 rounded-xl px-4"
         />
+        <p className="text-xs text-muted-foreground">
+          0 = bez celu — nie wlicza się do tygodniowej puli.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -283,7 +287,9 @@ export function SettingsContent({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{type.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {type.targetPerWeek}x / tydzień
+                        {type.targetPerWeek > 0
+                          ? `${type.targetPerWeek}x / tydzień`
+                          : "bez celu"}
                       </p>
                     </div>
                     <div className="flex gap-2">

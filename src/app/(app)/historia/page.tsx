@@ -64,7 +64,7 @@ async function getWeeklyHistory(userId: string) {
 
     const week = weekMap.get(key)!;
     week.workouts.push(workout);
-    week.completed++;
+    if (workout.activityType.targetPerWeek > 0) week.completed++; // goal-less don't count
   });
 
   return Array.from(weekMap.values()).sort(

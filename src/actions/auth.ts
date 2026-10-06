@@ -14,6 +14,8 @@ const DEFAULT_ACTIVITIES = [
   { name: "Bieganie", targetPerWeek: 3, icon: "PersonStanding", sortOrder: 1, color: "#f97316", healthKind: "running" },
   { name: "Rower", targetPerWeek: 3, icon: "Bike", sortOrder: 2, color: "#22c55e", healthKind: "cycling" },
   { name: "Basen", targetPerWeek: 2, icon: "Waves", sortOrder: 3, color: "#3b82f6", healthKind: "swimming" },
+  // No goal (0): a hike or a walk gets logged without touching the weekly pool.
+  { name: "Inna", targetPerWeek: 0, icon: "Activity", sortOrder: 4, color: "#8b5cf6", healthKind: null },
 ];
 
 export async function register(formData: FormData) {

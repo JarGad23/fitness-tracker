@@ -1,3 +1,16 @@
+# Goal-less activities + sleep format (2026-10-06)
+
+Jarek wanted an "Inna" option in the day modal for a hike/zoo walk. Target 0 = "bez celu":
+loggable everywhere, never in the weekly pool.
+
+- [x] Settings + actions accept 0–14; list and form preview say "bez celu"
+- [x] Dashboard "Ukończono" and history count only goal activities; progress bars skip them
+- [x] "Inna" (target 0, Activity icon, violet) in DEFAULT_ACTIVITIES for new accounts
+- [ ] Insert "Inna" for Jarek's account after the deploy is live (old code divides by 0)
+- [x] Sleep tile: "6 h 48 min" instead of "6,8 h"
+- [x] Verify: tsc, lint, throwaway user: Inna logged → 0/12, run → 1/12, 4 bars, calendar,
+      settings "bez celu", edit to 0 works; user logged out + deleted
+
 # Day modal redesign (2026-10-06)
 
 Jarek thought a day note needed one of the 4 activities picked ("Dodaj" disabled) — the

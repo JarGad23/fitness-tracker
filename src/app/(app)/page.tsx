@@ -72,7 +72,9 @@ async function StatsCards({ searchParams }: { searchParams: SearchParams }) {
   );
 
   const totalTarget = activityTypes.reduce((sum, a) => sum + a.targetPerWeek, 0);
-  const totalCompleted = workouts.length;
+  // Goal-less activities ("Inna", target 0) are logged but never count toward the pool.
+  const goalIds = new Set(activityTypes.filter((a) => a.targetPerWeek > 0).map((a) => a.id));
+  const totalCompleted = workouts.filter((w) => goalIds.has(w.activityTypeId)).length;
   const completionPercent =
     totalTarget > 0 ? Math.round((totalCompleted / totalTarget) * 100) : 0;
 
@@ -207,7 +209,7 @@ async function ProgressSection({
   );
   return (
     <WeeklyProgress
-      activityTypes={activityTypes}
+      activityTypes={activityTypes.filter((a) => a.targetPerWeek > 0)}
       workouts={workouts}
       weekKey={weekStartDate}
     />

@@ -7,6 +7,11 @@ import { eq, and } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { updateTag } from "next/cache";
 
+// 0 = no goal: the activity can be logged but never enters the weekly pool.
+function isValidTarget(n: number) {
+  return Number.isInteger(n) && n >= 0 && n <= 14;
+}
+
 export async function createActivityType(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -18,8 +23,11 @@ export async function createActivityType(formData: FormData) {
   const icon = formData.get("icon") as string;
   const color = (formData.get("color") as string) || null;
 
-  if (!name || !targetPerWeek || !icon) {
+  if (!name || !icon) {
     return { error: "Wszystkie pola są wymagane" };
+  }
+  if (!isValidTarget(targetPerWeek)) {
+    return { error: "Cel tygodniowy: od 0 do 14" };
   }
 
   const existingTypes = await db.query.activityTypes.findMany({
@@ -55,8 +63,11 @@ export async function updateActivityType(
   const icon = formData.get("icon") as string;
   const color = (formData.get("color") as string) || null;
 
-  if (!name || !targetPerWeek || !icon) {
+  if (!name || !icon) {
     return { error: "Wszystkie pola są wymagane" };
+  }
+  if (!isValidTarget(targetPerWeek)) {
+    return { error: "Cel tygodniowy: od 0 do 14" };
   }
 
   await db
