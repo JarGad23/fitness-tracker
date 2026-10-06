@@ -10,15 +10,16 @@ import {
   dayNotes,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
-import { and, eq, max } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { v4 as uuid, validate as isUuid } from "uuid";
 import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { DEFAULT_REPS, GYM_PROMPT_MIN_MINUTES, exerciseKey } from "@/lib/gym";
+import { GYM_PROMPT_MIN_MINUTES, exerciseKey } from "@/lib/gym";
 import { DAY_NOTE_MAX_LENGTH, DAY_TAGS } from "@/lib/day-notes";
 
-// Set ids are generated on the client so an optimistic set can be edited before
-// the server round-trip finishes. They're validated here like any other input.
+// Set and exercise ids are generated on the client, so an optimistic set (or a new
+// exercise's "+ Seria") works before the server round-trip finishes. They're
+// validated here like any other input.
 
 async function requireUserId() {
   const session = await auth();
@@ -34,21 +35,20 @@ async function requireOwnWorkout(userId: string, workoutId: string) {
   return workout;
 }
 
-async function requireOwnSet(userId: string, setId: string) {
-  const set = await db.query.workoutSets.findFirst({
-    where: eq(workoutSets.id, setId),
-    with: { workout: true },
-  });
-  if (!set || set.workout.userId !== userId) throw new Error("Nie znaleziono serii");
-  return set;
+// Ownership as a WHERE condition: a set write is one statement, not lookup + write.
+function ownSet(userId: string, setId: string) {
+  return and(
+    eq(workoutSets.id, setId),
+    inArray(
+      workoutSets.workoutId,
+      db.select({ id: workouts.id }).from(workouts).where(eq(workouts.userId, userId))
+    )
+  );
 }
 
-async function nextPosition(workoutId: string) {
-  const [row] = await db
-    .select({ value: max(workoutSets.position) })
-    .from(workoutSets)
-    .where(eq(workoutSets.workoutId, workoutId));
-  return (row?.value ?? -1) + 1;
+// Computed inside the INSERT, so it costs no extra round trip.
+function nextPositionSql(workoutId: string) {
+  return sql<number>`(select coalesce(max(${workoutSets.position}), -1) + 1 from ${workoutSets} where ${workoutSets.workoutId} = ${workoutId})`;
 }
 
 function checkSetValues(reps: number, weightKg: number | null) {
@@ -60,43 +60,53 @@ function checkSetValues(reps: number, weightKg: number | null) {
   }
 }
 
-function checkSetId(setId: string) {
-  if (!isUuid(setId)) throw new Error("Nieprawidłowe id serii");
+function checkId(id: string) {
+  if (!isUuid(id)) throw new Error("Nieprawidłowe id");
 }
 
-// Adds an exercise (created on first use) with one set. The set starts from the
-// last set of that exercise in any earlier workout, so the usual weight is prefilled.
-export async function addExercise(workoutId: string, setId: string, name: string) {
+function cleanExerciseName(name: string) {
+  const clean = name.trim().replace(/\s+/g, " ");
+  if (!clean || clean.length > 80) throw new Error("Nieprawidłowa nazwa ćwiczenia");
+  return clean;
+}
+
+// Adds an exercise (created on first use) with one set. The client resolves the name
+// to an id and prefills the set from that exercise's last set, so nothing on screen
+// changes when this returns.
+export async function addExercise(
+  workoutId: string,
+  setId: string,
+  exerciseId: string,
+  name: string,
+  reps: number,
+  weightKg: number | null
+) {
   const userId = await requireUserId();
-  checkSetId(setId);
+  checkId(setId);
+  checkId(exerciseId);
+  checkSetValues(reps, weightKg);
+  const cleanName = cleanExerciseName(name);
+
+  // Sequential on purpose: a parallel libsql request opens a second connection,
+  // which measured slower than two queries on the same one.
   await requireOwnWorkout(userId, workoutId);
-
-  const cleanName = name.trim().replace(/\s+/g, " ");
-  if (!cleanName || cleanName.length > 80) throw new Error("Nieprawidłowa nazwa ćwiczenia");
-
   const own = await db.query.exercises.findMany({ where: eq(exercises.userId, userId) });
-  let exercise = own.find((e) => exerciseKey(e.name) === exerciseKey(cleanName));
-  if (!exercise) {
-    exercise = { id: uuid(), userId, name: cleanName, createdAt: new Date() };
-    await db.insert(exercises).values(exercise);
-  }
+  // A name the user already has wins over a fresh client id (stale client list).
+  const existing =
+    own.find((e) => e.id === exerciseId) ??
+    own.find((e) => exerciseKey(e.name) === exerciseKey(cleanName));
+  const id = existing?.id ?? exerciseId;
 
-  const previous = await db
-    .select({ reps: workoutSets.reps, weightKg: workoutSets.weightKg })
-    .from(workoutSets)
-    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
-    .where(eq(workoutSets.exerciseId, exercise.id))
-    .orderBy(workouts.date, workoutSets.position)
-    .then((rows) => rows.at(-1));
-
-  await db.insert(workoutSets).values({
+  const insertSet = db.insert(workoutSets).values({
     id: setId,
     workoutId,
-    exerciseId: exercise.id,
-    position: await nextPosition(workoutId),
-    reps: previous?.reps ?? DEFAULT_REPS,
-    weightKg: previous?.weightKg ?? null,
+    exerciseId: id,
+    position: nextPositionSql(workoutId),
+    reps,
+    weightKg,
   });
+  if (existing) await insertSet;
+  else await db.batch([db.insert(exercises).values({ id, userId, name: cleanName }), insertSet]);
 
   updateTag("gym");
 }
@@ -109,10 +119,10 @@ export async function addSet(
   weightKg: number | null
 ) {
   const userId = await requireUserId();
-  checkSetId(setId);
+  checkId(setId);
   checkSetValues(reps, weightKg);
-  await requireOwnWorkout(userId, workoutId);
 
+  await requireOwnWorkout(userId, workoutId);
   const exercise = await db.query.exercises.findFirst({
     where: and(eq(exercises.id, exerciseId), eq(exercises.userId, userId)),
   });
@@ -122,7 +132,7 @@ export async function addSet(
     id: setId,
     workoutId,
     exerciseId,
-    position: await nextPosition(workoutId),
+    position: nextPositionSql(workoutId),
     reps,
     weightKg,
   });
@@ -133,17 +143,48 @@ export async function addSet(
 export async function updateSet(setId: string, reps: number, weightKg: number | null) {
   const userId = await requireUserId();
   checkSetValues(reps, weightKg);
-  await requireOwnSet(userId, setId);
 
-  await db.update(workoutSets).set({ reps, weightKg }).where(eq(workoutSets.id, setId));
+  const result = await db
+    .update(workoutSets)
+    .set({ reps, weightKg })
+    .where(ownSet(userId, setId));
+  if (result.rowsAffected === 0) throw new Error("Nie znaleziono serii");
   updateTag("gym");
 }
 
 export async function deleteSet(setId: string) {
   const userId = await requireUserId();
-  await requireOwnSet(userId, setId);
 
-  await db.delete(workoutSets).where(eq(workoutSets.id, setId));
+  const result = await db.delete(workoutSets).where(ownSet(userId, setId));
+  if (result.rowsAffected === 0) throw new Error("Nie znaleziono serii");
+  updateTag("gym");
+}
+
+// Renames an exercise everywhere (fixing a typo fixes the history too). Renaming to
+// a name the user already has merges the two: sets move over, the duplicate goes.
+export async function renameExercise(exerciseId: string, name: string) {
+  const userId = await requireUserId();
+  const cleanName = cleanExerciseName(name);
+
+  const own = await db.query.exercises.findMany({ where: eq(exercises.userId, userId) });
+  const exercise = own.find((e) => e.id === exerciseId);
+  if (!exercise) throw new Error("Nie znaleziono ćwiczenia");
+  const twin = own.find(
+    (e) => e.id !== exerciseId && exerciseKey(e.name) === exerciseKey(cleanName)
+  );
+
+  if (twin) {
+    await db.batch([
+      db
+        .update(workoutSets)
+        .set({ exerciseId: twin.id })
+        .where(eq(workoutSets.exerciseId, exerciseId)),
+      db.delete(exercises).where(eq(exercises.id, exerciseId)),
+    ]);
+  } else if (exercise.name !== cleanName) {
+    await db.update(exercises).set({ name: cleanName }).where(eq(exercises.id, exerciseId));
+  }
+
   updateTag("gym");
 }
 

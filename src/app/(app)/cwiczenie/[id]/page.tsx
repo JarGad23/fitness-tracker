@@ -7,7 +7,7 @@ import { Trophy } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getCachedExerciseHistory } from "@/lib/queries";
 import { formatSet, formatWeight } from "@/lib/gym";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst, pluralPl } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 
 type Params = Promise<{ id: string }>;
@@ -22,12 +22,6 @@ function bestSet(sets: HistorySet[]) {
       ? s
       : best
   );
-}
-
-function workoutsLabel(n: number) {
-  if (n === 1) return "trening";
-  const tens = n % 100;
-  return n % 10 >= 2 && n % 10 <= 4 && (tens < 12 || tens > 14) ? "treningi" : "treningów";
 }
 
 async function HistorySection({ params }: { params: Params }) {
@@ -48,7 +42,7 @@ async function HistorySection({ params }: { params: Params }) {
         <p className="text-sm text-muted-foreground">
           {sessions.length === 0
             ? "Jeszcze bez serii"
-            : `${sessions.length} ${workoutsLabel(sessions.length)}`}
+            : `${sessions.length} ${pluralPl(sessions.length, ["trening", "treningi", "treningów"])}`}
         </p>
       </div>
 

@@ -26,7 +26,7 @@ async function WorkoutSection({ params }: { params: Params }) {
   if (!workout || workout.activityType.healthKind !== "strength") notFound();
 
   const [exercises, previous] = await Promise.all([
-    getCachedExercises(userId),
+    getCachedExercises(userId, workout.id, workout.date),
     workout.sets.length === 0
       ? getCachedPreviousStrengthSession(userId, workout.id, workout.date)
       : null,
@@ -69,7 +69,7 @@ async function WorkoutSection({ params }: { params: Params }) {
       <WorkoutSets
         workoutId={workout.id}
         sets={sets}
-        exerciseNames={exercises.map((e) => e.name)}
+        exercises={exercises}
         previous={
           previous
             ? {
@@ -97,7 +97,7 @@ function WorkoutSkeleton() {
 
 export default function WorkoutPage({ params }: { params: Params }) {
   return (
-    <div className="p-4 lg:p-0 lg:max-w-xl space-y-4">
+    <div className="p-4 lg:p-0 lg:max-w-4xl space-y-4">
       <Suspense fallback={<WorkoutSkeleton />}>
         <WorkoutSection params={params} />
       </Suspense>

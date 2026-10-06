@@ -94,3 +94,10 @@ export function todayISO(timeZone: string = APP_TIME_ZONE) {
   // en-CA formats as YYYY-MM-DD
   return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
 }
+
+/** Polish plural: pluralPl(1, ["seria", "serie", "serii"]) → "seria", 3 → "serie", 5 → "serii". */
+export function pluralPl(n: number, [one, few, many]: [string, string, string]) {
+  if (n === 1) return one;
+  const tens = n % 100;
+  return n % 10 >= 2 && n % 10 <= 4 && (tens < 12 || tens > 14) ? few : many;
+}

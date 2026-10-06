@@ -1,3 +1,20 @@
+# Workout sets page: rename, speed, layout, hovers (2026-10-06)
+
+- [x] Rename exercise (pencil → input, Enter/blur saves, Esc cancels); renaming to an existing
+      name merges (sets moved, duplicate deleted); commit guarded against a double blur
+- [x] Client-side exercise ids + prefill from the last set up to this workout's date
+      (`getCachedExercises(userId, workoutId, date)`): new card usable at once, no value jump
+- [x] `updateSet`/`deleteSet` one statement (ownership in WHERE); position computed in the
+      INSERT; independent checks in parallel; new exercise + set in one `db.batch`
+- [x] Summary row (ćwiczenia · serie · tonnage), "Ostatnio (d MMM): kg × reps" per card,
+      2-column cards on lg (`lg:max-w-4xl`)
+- [x] `cursor: pointer` for buttons app-wide (Tailwind 4 dropped it); steppers/+ Seria/chips
+      hover with `bg-accent`, trash with a red tint
+- [x] `vercel.json` → `regions: ["dub1"]` (functions were in iad1, DB in eu-west-1); parallel
+      libsql queries reverted to sequential (measured slower)
+- [x] Verify: tsc, lint, throwaway user desktop + 390 px; rename + merge checked in the DB;
+      updateSet 120–136 ms → 71 ms locally; user logged out + deleted
+
 # Goal-less activities + sleep format (2026-10-06)
 
 Jarek wanted an "Inna" option in the day modal for a hike/zoo walk. Target 0 = "bez celu":

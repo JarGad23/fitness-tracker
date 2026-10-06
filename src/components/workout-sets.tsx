@@ -1,16 +1,26 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { parseISO, format } from "date-fns";
+import { pl } from "date-fns/locale";
 import { toast } from "sonner";
 import { v4 as uuid } from "uuid";
-import { Minus, Plus, Trash2, Copy, Loader2, ChevronRight } from "lucide-react";
+import { Minus, Plus, Trash2, Copy, Loader2, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { addExercise, addSet, updateSet, deleteSet, copySetsFrom } from "@/actions/gym";
-import { DEFAULT_REPS, WEIGHT_STEP_KG, exerciseKey } from "@/lib/gym";
+import {
+  addExercise,
+  addSet,
+  updateSet,
+  deleteSet,
+  copySetsFrom,
+  renameExercise,
+} from "@/actions/gym";
+import { DEFAULT_REPS, WEIGHT_STEP_KG, exerciseKey, formatWeight } from "@/lib/gym";
 import { parseLocaleNumber } from "@/lib/health-sync";
+import { pluralPl } from "@/lib/utils";
 
 export type EditorSet = {
   id: string;
@@ -27,10 +37,20 @@ export type PreviousSession = {
   exerciseNames: string[];
 };
 
+/** One of the user's exercises with its newest set outside this workout. */
+export type ExerciseOption = {
+  id: string;
+  name: string;
+  lastDate: string | null;
+  lastReps: number | null;
+  lastWeightKg: number | null;
+};
+
 type Action =
   | { type: "add"; set: EditorSet }
   | { type: "update"; id: string; reps: number; weightKg: number | null }
-  | { type: "delete"; id: string };
+  | { type: "delete"; id: string }
+  | { type: "rename"; fromId: string; toId: string; name: string };
 
 function reducer(sets: EditorSet[], action: Action): EditorSet[] {
   switch (action.type) {
@@ -42,15 +62,21 @@ function reducer(sets: EditorSet[], action: Action): EditorSet[] {
       );
     case "delete":
       return sets.filter((s) => s.id !== action.id);
+    case "rename":
+      return sets.map((s) =>
+        s.exerciseId === action.fromId || s.exerciseId === action.toId
+          ? { ...s, exerciseId: action.toId, exerciseName: action.name }
+          : s
+      );
   }
 }
 
-// Exercises the server doesn't know yet (optimistic add) carry this id prefix.
-const PENDING_EXERCISE = "pending:";
 const QUICK_PICKS = 6;
 
-function groupByExercise(sets: EditorSet[]) {
-  const groups = new Map<string, { id: string; name: string; sets: EditorSet[] }>();
+type Group = { id: string; name: string; sets: EditorSet[] };
+
+function groupByExercise(sets: EditorSet[]): Group[] {
+  const groups = new Map<string, Group>();
   for (const set of [...sets].sort((a, b) => a.position - b.position)) {
     const group = groups.get(set.exerciseId);
     if (group) group.sets.push(set);
@@ -59,15 +85,19 @@ function groupByExercise(sets: EditorSet[]) {
   return [...groups.values()];
 }
 
+function cleanName(name: string) {
+  return name.trim().replace(/\s+/g, " ");
+}
+
 export function WorkoutSets({
   workoutId,
   sets,
-  exerciseNames,
+  exercises,
   previous,
 }: {
   workoutId: string;
   sets: EditorSet[];
-  exerciseNames: string[];
+  exercises: ExerciseOption[];
   previous: PreviousSession | null;
 }) {
   const [optimisticSets, apply] = useOptimistic(sets, reducer);
@@ -77,6 +107,14 @@ export function WorkoutSets({
 
   const groups = groupByExercise(optimisticSets);
   const nextPosition = Math.max(-1, ...optimisticSets.map((s) => s.position)) + 1;
+  const byKey = new Map(exercises.map((e) => [exerciseKey(e.name), e]));
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+
+  // Recent exercises not in this workout yet: one tap instead of typing
+  // (<datalist> suggestions are unreliable on iOS Safari).
+  const quickPicks = exercises
+    .filter((e) => !groups.some((g) => g.id === e.id))
+    .slice(0, QUICK_PICKS);
 
   const run = (action: Action, call: () => Promise<unknown>, errorMessage: string) => {
     startTransition(async () => {
@@ -90,27 +128,26 @@ export function WorkoutSets({
     });
   };
 
-  // Recent exercises not in this workout yet: one tap instead of typing
-  // (<datalist> suggestions are unreliable on iOS Safari).
-  const quickPicks = exerciseNames
-    .filter((name) => !groups.some((g) => exerciseKey(g.name) === exerciseKey(name)))
-    .slice(0, QUICK_PICKS);
-
+  // The id and the prefill are decided here, so the new card is fully usable at once
+  // and nothing jumps when the server answers.
   const addExerciseByName = (rawName: string) => {
-    const name = rawName.trim();
+    const name = cleanName(rawName);
     if (!name) return;
-    const known = groups.find((g) => exerciseKey(g.name) === exerciseKey(name));
+    const inWorkout = groups.find((g) => exerciseKey(g.name) === exerciseKey(name));
+    const known = byKey.get(exerciseKey(name));
+    const lastHere = inWorkout?.sets.at(-1);
     const set: EditorSet = {
       id: uuid(),
-      exerciseId: known?.id ?? PENDING_EXERCISE + exerciseKey(name),
-      exerciseName: known?.name ?? name,
+      exerciseId: inWorkout?.id ?? known?.id ?? uuid(),
+      exerciseName: inWorkout?.name ?? known?.name ?? name,
       position: nextPosition,
-      reps: known?.sets.at(-1)?.reps ?? DEFAULT_REPS,
-      weightKg: known?.sets.at(-1)?.weightKg ?? null,
+      reps: lastHere?.reps ?? known?.lastReps ?? DEFAULT_REPS,
+      weightKg: lastHere ? lastHere.weightKg : (known?.lastWeightKg ?? null),
     };
     run(
       { type: "add", set },
-      () => addExercise(workoutId, set.id, name),
+      () =>
+        addExercise(workoutId, set.id, set.exerciseId, set.exerciseName, set.reps, set.weightKg),
       "Nie udało się dodać ćwiczenia"
     );
   };
@@ -121,7 +158,7 @@ export function WorkoutSets({
     setNewExercise("");
   };
 
-  const handleAddSet = (group: ReturnType<typeof groupByExercise>[number]) => {
+  const handleAddSet = (group: Group) => {
     const last = group.sets.at(-1)!;
     const set: EditorSet = { ...last, id: uuid(), position: nextPosition };
     run(
@@ -144,6 +181,19 @@ export function WorkoutSets({
     run({ type: "delete", id: set.id }, () => deleteSet(set.id), "Nie udało się usunąć serii");
   };
 
+  // Renaming to a name the user already has merges into that exercise.
+  const handleRename = (group: Group, rawName: string) => {
+    const name = cleanName(rawName);
+    if (!name || name === group.name) return;
+    const twin = byKey.get(exerciseKey(name));
+    const toId = twin && twin.id !== group.id ? twin.id : group.id;
+    run(
+      { type: "rename", fromId: group.id, toId, name: toId === group.id ? name : twin!.name },
+      () => renameExercise(group.id, name),
+      "Nie udało się zmienić nazwy"
+    );
+  };
+
   const handleCopy = (source: PreviousSession) => {
     startCopy(async () => {
       try {
@@ -154,6 +204,9 @@ export function WorkoutSets({
       }
     });
   };
+
+  const setCount = optimisticSets.length;
+  const tonnage = optimisticSets.reduce((sum, s) => sum + (s.weightKg ?? 0) * s.reps, 0);
 
   const addExerciseControls = (
     <div className="space-y-2">
@@ -168,32 +221,28 @@ export function WorkoutSets({
           className="h-11 rounded-xl bg-card"
         />
         <datalist id="exercise-options">
-          {exerciseNames.map((name) => (
-            <option key={name} value={name} />
+          {exercises.map((e) => (
+            <option key={e.id} value={e.name} />
           ))}
         </datalist>
-        <Button
-          type="submit"
-          disabled={!newExercise.trim()}
-          className="h-11 rounded-xl px-4"
-        >
+        <Button type="submit" disabled={!newExercise.trim()} className="h-11 rounded-xl px-4">
           <Plus />
           Dodaj
         </Button>
       </form>
       {quickPicks.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {quickPicks.map((name) => (
+          {quickPicks.map((e) => (
             <Button
-              key={name}
+              key={e.id}
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => addExerciseByName(name)}
-              className="rounded-full"
+              onClick={() => addExerciseByName(e.name)}
+              className="rounded-full hover:bg-accent"
             >
               <Plus />
-              {name}
+              {e.name}
             </Button>
           ))}
         </div>
@@ -203,13 +252,20 @@ export function WorkoutSets({
 
   return (
     <div className="space-y-4">
+      {groups.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {groups.length} {pluralPl(groups.length, ["ćwiczenie", "ćwiczenia", "ćwiczeń"])}
+          {" · "}
+          {setCount} {pluralPl(setCount, ["seria", "serie", "serii"])}
+          {tonnage > 0 && ` · ${Math.round(tonnage).toLocaleString("pl-PL")} kg`}
+        </p>
+      )}
+
       {groups.length === 0 && previous && (
         <Card className="border-border/50">
           <CardContent className="p-4 space-y-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold">
-                Ostatni trening: {previous.label}
-              </p>
+              <p className="text-sm font-semibold">Ostatni trening: {previous.label}</p>
               <p className="text-sm text-muted-foreground truncate">
                 {previous.exerciseNames.join(", ")}
               </p>
@@ -226,55 +282,24 @@ export function WorkoutSets({
         </Card>
       )}
 
-      {groups.map((group) => {
-        const pending = group.id.startsWith(PENDING_EXERCISE);
-        return (
-          <Card key={group.id} className="border-border/50">
-            <CardContent className="p-4 space-y-2">
-              {pending ? (
-                <p className="font-semibold">{group.name}</p>
-              ) : (
-                <Link
-                  href={`/cwiczenie/${group.id}`}
-                  className="flex items-center gap-1 font-semibold hover:text-primary w-fit"
-                >
-                  {group.name}
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </Link>
-              )}
-
-              <div className="grid grid-cols-[1.25rem_1fr_1fr_2rem] items-center gap-x-2 gap-y-2">
-                <span />
-                <span className="text-xs text-muted-foreground text-center">kg</span>
-                <span className="text-xs text-muted-foreground text-center">powt.</span>
-                <span />
-                {group.sets.map((set, index) => (
-                  <SetRow
-                    key={set.id}
-                    index={index + 1}
-                    set={set}
-                    onChange={(reps, weightKg) => handleUpdate(set, reps, weightKg)}
-                    onDelete={() => handleDelete(set)}
-                  />
-                ))}
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => handleAddSet(group)}
-                disabled={pending}
-                className="w-full h-10 rounded-xl"
-              >
-                <Plus />
-                Seria
-              </Button>
-            </CardContent>
-          </Card>
-        );
-      })}
+      {groups.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          {groups.map((group) => (
+            <ExerciseCard
+              key={group.id}
+              group={group}
+              last={byId.get(group.id) ?? null}
+              onRename={(name) => handleRename(group, name)}
+              onAddSet={() => handleAddSet(group)}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
 
       {groups.length === 0 ? (
-        <Card className="border-border/50">
+        <Card className="border-border/50 lg:max-w-xl">
           <CardContent className="p-4 space-y-3">
             <div>
               <p className="text-sm font-semibold">Dodaj pierwsze ćwiczenie</p>
@@ -286,9 +311,113 @@ export function WorkoutSets({
           </CardContent>
         </Card>
       ) : (
-        addExerciseControls
+        <div className="lg:max-w-[calc(50%-0.5rem)]">{addExerciseControls}</div>
       )}
     </div>
+  );
+}
+
+function ExerciseCard({
+  group,
+  last,
+  onRename,
+  onAddSet,
+  onUpdate,
+  onDelete,
+}: {
+  group: Group;
+  last: ExerciseOption | null;
+  onRename: (name: string) => void;
+  onAddSet: () => void;
+  onUpdate: (set: EditorSet, reps: number, weightKg: number | null) => void;
+  onDelete: (set: EditorSet) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  // Enter blurs the field, and a phone keyboard can blur it again: commit once.
+  const committed = useRef(false);
+
+  return (
+    <Card className="border-border/50">
+      <CardContent className="p-4 space-y-2">
+        {editing ? (
+          <Input
+            autoFocus
+            defaultValue={group.name}
+            aria-label="Nowa nazwa ćwiczenia"
+            maxLength={80}
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                e.currentTarget.value = group.name;
+                e.currentTarget.blur();
+              }
+            }}
+            onBlur={(e) => {
+              if (committed.current) return;
+              committed.current = true;
+              onRename(e.currentTarget.value);
+              setEditing(false);
+            }}
+            className="h-9 rounded-lg font-semibold"
+          />
+        ) : (
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/cwiczenie/${group.id}`}
+              className="flex min-w-0 items-center gap-1 font-semibold hover:text-primary"
+            >
+              <span className="truncate">{group.name}</span>
+              <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                committed.current = false;
+                setEditing(true);
+              }}
+              aria-label={`Zmień nazwę: ${group.name}`}
+              className="ml-auto text-muted-foreground hover:bg-accent hover:text-primary"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {last?.lastDate && last.lastReps != null && (
+          <p className="text-xs text-muted-foreground">
+            Ostatnio ({format(parseISO(last.lastDate), "d MMM", { locale: pl })}):{" "}
+            {formatWeight(last.lastWeightKg)} × {last.lastReps}
+          </p>
+        )}
+
+        <div className="grid grid-cols-[1.25rem_1fr_1fr_2rem] items-center gap-x-2 gap-y-2">
+          <span />
+          <span className="text-xs text-muted-foreground text-center">kg</span>
+          <span className="text-xs text-muted-foreground text-center">powt.</span>
+          <span />
+          {group.sets.map((set, index) => (
+            <SetRow
+              key={set.id}
+              index={index + 1}
+              set={set}
+              onChange={(reps, weightKg) => onUpdate(set, reps, weightKg)}
+              onDelete={() => onDelete(set)}
+            />
+          ))}
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={onAddSet}
+          className="w-full h-10 rounded-xl hover:bg-accent"
+        >
+          <Plus />
+          Seria
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -345,7 +474,7 @@ function SetRow({
         size="icon"
         onClick={onDelete}
         aria-label={`Usuń serię ${index}`}
-        className="text-muted-foreground hover:text-destructive"
+        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       >
         <Trash2 />
       </Button>
@@ -376,7 +505,7 @@ function Stepper({
         type="button"
         onClick={() => onStep(-1)}
         aria-label={`${label}: mniej`}
-        className="h-10 w-8 shrink-0 flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted"
+        className="h-10 w-8 shrink-0 flex items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent"
       >
         <Minus className="w-4 h-4" />
       </button>
@@ -402,7 +531,7 @@ function Stepper({
         type="button"
         onClick={() => onStep(1)}
         aria-label={`${label}: więcej`}
-        className="h-10 w-8 shrink-0 flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted"
+        className="h-10 w-8 shrink-0 flex items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent"
       >
         <Plus className="w-4 h-4" />
       </button>

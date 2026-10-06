@@ -111,24 +111,40 @@ export async function getCachedWorkoutWithSets(userId: string, workoutId: string
 }
 
 // Most recently used first, never-used ones last (alphabetical).
-export async function getCachedExercises(userId: string) {
+export async function getCachedExercises(
+  userId: string,
+  workoutId: string,
+  workoutDate: string
+) {
   "use cache";
   cacheTag("gym");
   cacheLife("hours");
 
-  const lastUsed = sql<string | null>`max(${workouts.date})`;
-  return db
-    .select({ id: exercises.id, name: exercises.name, lastUsed })
+  // The newest set of each exercise in another workout up to this one's date: prefills
+  // a new set and feeds the "Ostatnio" line (backfilling an old day never shows a later
+  // session). Correlated subqueries keep it one round trip.
+  const last = (column: "w.date" | "s.reps" | "s.weight_kg") =>
+    sql`(select ${sql.raw(column)} from workout_sets s join workouts w on w.id = s.workout_id
+      where s.exercise_id = ${exercises.id} and w.id <> ${workoutId} and w.date <= ${workoutDate}
+      order by w.date desc, w.created_at desc, s.position desc limit 1)`;
+
+  const rows = await db
+    .select({
+      id: exercises.id,
+      name: exercises.name,
+      lastDate: sql<string | null>`${last("w.date")}`,
+      lastReps: sql<number | null>`${last("s.reps")}`,
+      lastWeightKg: sql<number | null>`${last("s.weight_kg")}`,
+    })
     .from(exercises)
-    .leftJoin(workoutSets, eq(workoutSets.exerciseId, exercises.id))
-    .leftJoin(workouts, eq(workouts.id, workoutSets.workoutId))
-    .where(eq(exercises.userId, userId))
-    .groupBy(exercises.id)
-    .orderBy(sql`${lastUsed} is null`, desc(lastUsed), exercises.name);
+    .where(eq(exercises.userId, userId));
+
+  return rows.sort(
+    (a, b) =>
+      (b.lastDate ?? "").localeCompare(a.lastDate ?? "") || a.name.localeCompare(b.name, "pl")
+  );
 }
 
-// The latest other strength workout on or before `date` that has sets —
-// the source for "copy exercises from last time".
 export async function getCachedPreviousStrengthSession(
   userId: string,
   workoutId: string,
