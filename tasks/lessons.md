@@ -68,3 +68,11 @@ outlives the user (HANDOFF known issue), so the next `/register` silently redire
 and the "new" user is never created — seeding then fails with no row.
 **Better:** Click "Wyloguj" before deleting a test user. Seed rows *before* the first page
 load or restart `npm run dev` afterwards — direct DB inserts don't invalidate `"use cache"` tags.
+
+### Measure latency before naming a cause
+**Avoid:** Telling Jarek a 400–500 ms server action was "mostly the session check" without
+measuring. `auth()` with JWT only decrypts a cookie. The real causes were Vercel functions in
+`iad1` while Turso is in `eu-west-1`, plus `Promise.all` on libsql (a second connection:
+146 ms for two `select 1` vs 51 ms batched, 48 ms per sequential query from the Mac).
+**Better:** Time each step (`performance.now()` around queries, `x-vercel-id` for the function
+region) before explaining slowness. Keep the function region next to the DB.

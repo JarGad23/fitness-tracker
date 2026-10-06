@@ -31,6 +31,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 - npm 11 blocks dependency install scripts by default (`npm install-scripts ls`). Nothing in this project needs them so far.
 - `.gitattributes` (`* text=auto eol=lf`) keeps line endings LF.
 - `next start` serves the last `next build`; source changes need a rebuild.
+- **Region:** Turso lives in `aws-eu-west-1` (Ireland); `vercel.json` pins functions to `dub1` (Dublin) next to it. Before 2026-10-06 they ran in the default `iad1` (US East), so every DB query crossed the Atlantic (~80 ms each). Check with `curl -sD - <prod>/api/ai/context | grep x-vercel-id` → `…::dub1::…`.
 - Testing the webhook against the real DB: prefer `?dry=1`; for real writes use a throwaway user and delete it afterwards (all tables cascade from `users`).
 
 ---
