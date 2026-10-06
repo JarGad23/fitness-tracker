@@ -47,6 +47,7 @@ function reducer(sets: EditorSet[], action: Action): EditorSet[] {
 
 // Exercises the server doesn't know yet (optimistic add) carry this id prefix.
 const PENDING_EXERCISE = "pending:";
+const QUICK_PICKS = 6;
 
 function groupByExercise(sets: EditorSet[]) {
   const groups = new Map<string, { id: string; name: string; sets: EditorSet[] }>();
@@ -89,9 +90,14 @@ export function WorkoutSets({
     });
   };
 
-  const handleAddExercise = (event: React.FormEvent) => {
-    event.preventDefault();
-    const name = newExercise.trim();
+  // Recent exercises not in this workout yet: one tap instead of typing
+  // (<datalist> suggestions are unreliable on iOS Safari).
+  const quickPicks = exerciseNames
+    .filter((name) => !groups.some((g) => exerciseKey(g.name) === exerciseKey(name)))
+    .slice(0, QUICK_PICKS);
+
+  const addExerciseByName = (rawName: string) => {
+    const name = rawName.trim();
     if (!name) return;
     const known = groups.find((g) => exerciseKey(g.name) === exerciseKey(name));
     const set: EditorSet = {
@@ -102,12 +108,17 @@ export function WorkoutSets({
       reps: known?.sets.at(-1)?.reps ?? DEFAULT_REPS,
       weightKg: known?.sets.at(-1)?.weightKg ?? null,
     };
-    setNewExercise("");
     run(
       { type: "add", set },
       () => addExercise(workoutId, set.id, name),
       "Nie udało się dodać ćwiczenia"
     );
+  };
+
+  const handleSubmitExercise = (event: React.FormEvent) => {
+    event.preventDefault();
+    addExerciseByName(newExercise);
+    setNewExercise("");
   };
 
   const handleAddSet = (group: ReturnType<typeof groupByExercise>[number]) => {
@@ -143,6 +154,52 @@ export function WorkoutSets({
       }
     });
   };
+
+  const addExerciseControls = (
+    <div className="space-y-2">
+      <form onSubmit={handleSubmitExercise} className="flex gap-2">
+        <Input
+          value={newExercise}
+          onChange={(e) => setNewExercise(e.target.value)}
+          list="exercise-options"
+          placeholder="Nowe ćwiczenie"
+          aria-label="Nazwa ćwiczenia"
+          maxLength={80}
+          className="h-11 rounded-xl bg-card"
+        />
+        <datalist id="exercise-options">
+          {exerciseNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <Button
+          type="submit"
+          disabled={!newExercise.trim()}
+          className="h-11 rounded-xl px-4"
+        >
+          <Plus />
+          Dodaj
+        </Button>
+      </form>
+      {quickPicks.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {quickPicks.map((name) => (
+            <Button
+              key={name}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => addExerciseByName(name)}
+              className="rounded-full"
+            >
+              <Plus />
+              {name}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -216,30 +273,21 @@ export function WorkoutSets({
         );
       })}
 
-      <form onSubmit={handleAddExercise} className="flex gap-2">
-        <Input
-          value={newExercise}
-          onChange={(e) => setNewExercise(e.target.value)}
-          list="exercise-options"
-          placeholder="Nowe ćwiczenie"
-          aria-label="Nazwa ćwiczenia"
-          maxLength={80}
-          className="h-11 rounded-xl bg-card"
-        />
-        <datalist id="exercise-options">
-          {exerciseNames.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-        <Button
-          type="submit"
-          disabled={!newExercise.trim()}
-          className="h-11 rounded-xl px-4"
-        >
-          <Plus />
-          Dodaj
-        </Button>
-      </form>
+      {groups.length === 0 ? (
+        <Card className="border-border/50">
+          <CardContent className="p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold">Dodaj pierwsze ćwiczenie</p>
+              <p className="text-sm text-muted-foreground">
+                Kolejne serie zaczynają się od ostatniego ciężaru i powtórzeń.
+              </p>
+            </div>
+            {addExerciseControls}
+          </CardContent>
+        </Card>
+      ) : (
+        addExerciseControls
+      )}
     </div>
   );
 }

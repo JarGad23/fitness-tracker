@@ -7,12 +7,15 @@ import {
   exercises,
   activityTypes,
   healthMetrics,
+  dayNotes,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { and, eq, max } from "drizzle-orm";
 import { v4 as uuid, validate as isUuid } from "uuid";
 import { updateTag } from "next/cache";
+import { redirect } from "next/navigation";
 import { DEFAULT_REPS, GYM_PROMPT_MIN_MINUTES, exerciseKey } from "@/lib/gym";
+import { DAY_NOTE_MAX_LENGTH, DAY_TAGS } from "@/lib/day-notes";
 
 // Set ids are generated on the client so an optimistic set can be edited before
 // the server round-trip finishes. They're validated here like any other input.
@@ -174,7 +177,8 @@ export async function copySetsFrom(workoutId: string, sourceWorkoutId: string) {
 }
 
 // "Yes, that was the gym" — logs a strength workout for a day the watch saw
-// enough exercise minutes. Returns the workout id so the client can open it.
+// enough exercise minutes, then opens it. Redirecting from the action renders the
+// workout page in the same response — no second round trip after the action.
 export async function confirmGymPrompt(date: string) {
   const userId = await requireUserId();
 
@@ -205,16 +209,41 @@ export async function confirmGymPrompt(date: string) {
   });
 
   updateTag("workouts");
-  return id;
+  redirect(`/trening/${id}`);
 }
 
-export async function dismissGymPrompt(date: string) {
+// "No, it wasn't the gym". An optional answer to "what was it?" (a hike, a walk) is
+// merged into that day's note — tag "extra_activity" plus the text — so the AI coach
+// can explain the exercise minutes. An existing note is extended, never replaced.
+export async function dismissGymPrompt(date: string, what = "") {
   const userId = await requireUserId();
 
-  await db
+  const result = await db
     .update(healthMetrics)
     .set({ gymPromptDismissed: true })
     .where(and(eq(healthMetrics.userId, userId), eq(healthMetrics.date, date)));
-
   updateTag("health-metrics");
+
+  // Only days the watch reported can be answered, so `date` is a real day here.
+  const answer = what.trim().replace(/\s+/g, " ");
+  if (!answer || result.rowsAffected === 0) return;
+
+  const existing = await db.query.dayNotes.findFirst({
+    where: and(eq(dayNotes.userId, userId), eq(dayNotes.date, date)),
+  });
+  const known = [...(existing?.tags ?? []), "extra_activity"];
+  const tags: string[] = DAY_TAGS.map((t) => t.key).filter((key) => known.includes(key));
+  const text = (existing?.text ? `${existing.text}\n${answer}` : answer).slice(
+    0,
+    DAY_NOTE_MAX_LENGTH
+  );
+
+  await db
+    .insert(dayNotes)
+    .values({ id: uuid(), userId, date, tags, text })
+    .onConflictDoUpdate({
+      target: [dayNotes.userId, dayNotes.date],
+      set: { tags, text, updatedAt: new Date() },
+    });
+  updateTag("day-notes");
 }

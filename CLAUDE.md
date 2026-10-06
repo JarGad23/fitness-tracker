@@ -13,7 +13,7 @@ Otwórz: http://localhost:3000
 
 Polska aplikacja fitness do śledzenia tygodniowych celów treningowych. Użytkownik loguje aktywności dowolnego dnia, cel to "wyczyścić" tygodniową pulę.
 
-**Właściciel:** Jarek (jarek@biggerpicture.agency)
+**Właściciel:** Jarek — prywatny projekt; konto w aplikacji jest na prywatnym mailu, nie firmowym (repo publiczne, maila tu nie wpisujemy).
 
 ## Kluczowe Pliki
 

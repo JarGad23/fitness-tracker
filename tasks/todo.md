@@ -1,3 +1,20 @@
+# Gym prompt fixes (2026-10-06)
+
+Found on real data: hike/zoo days answered "Nie" lost the info; "Tak" felt slow; an empty
+workout page was a lone input.
+
+- [x] "Nie" → "Co to było?" (Zapisz / Pomiń); the answer merges into the day note
+      (tag `extra_activity` + text appended, existing note kept); only for days with a watch row
+- [x] "Tak": `confirmGymPrompt` redirects from the action (one round trip); spinner until the
+      page lands; `unstable_rethrow` keeps the redirect error out of the toast
+- [x] Empty workout: "Dodaj pierwsze ćwiczenie" card; recent exercises as one-tap chips (max 6)
+- [x] Verify: tsc, lint, throwaway user at 390 px (iframe), user deleted afterwards
+
+## Review
+- Merge checked in the DB: `["poor_sleep","extra_activity"]`, "Stara notatka\nWyprawa w góry".
+- "Tak": one fetch (the action), no second navigation request, no toast.
+- Direct DB inserts don't invalidate `"use cache"` tags — restart dev before testing seeded rows.
+
 # Day notes — tags + text, sent to the AI
 
 Decisions (2026-09-29): quick tags + optional text; "Dziś" card on the dashboard + day
