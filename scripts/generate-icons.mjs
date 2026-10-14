@@ -1,6 +1,7 @@
 // Generates PWA PNG icons from public/icons/icon.svg.
-// Run on Windows (sharp's native binary is platform-specific and isn't
-// available under WSL here):  node scripts/generate-icons.mjs
+// Run: node scripts/generate-icons.mjs
+// The PNGs are full-bleed squares: iOS and Android masks round the corners
+// themselves, and transparent corners from the SVG's rx would show up black.
 import sharp from "sharp";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -20,6 +21,7 @@ for (const { file, size } of targets) {
   // High density so the vector upscales crisply before resizing down.
   await sharp(svg, { density: 384 })
     .resize(size, size)
+    .flatten({ background: "#16a34a" })
     .png()
     .toFile(join(iconsDir, file));
   console.log("wrote", `public/icons/${file}`);
