@@ -95,7 +95,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | Bearer auth for machine clients | `src/lib/api-auth.ts` |
 | Day notes: tags, editor, actions | `src/lib/day-notes.ts`, `src/components/day-note-editor.tsx`, `src/actions/day-notes.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
-| Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v3"): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v3"`. Swimming is off by default: a Health type with no samples at all shows a blocking "no samples found" alert that would stall the background automation. |
+| Shortcut generator (macOS, signs with `shortcuts sign`) | `scripts/shortcuts/generate-watch-sync.py` — live one ("Watch Sync v4", 2026-10-14): `--email <account> --hr-source "Apple Watch (Jarosław)" --name "Watch Sync v4"`. All workout signals on (swimming too); each fills missing days with 0, because a Health type with no samples in the window shows a blocking "no samples found" alert that stalls the background automation (v3 had that risk for cycling). Triggers: daily 11:00 + opening the Fitness app (Health data is locked while the phone is locked). |
 | Auth config / route protection | `src/lib/auth.ts`, `src/proxy.ts` |
 | Auth screens (split: showcase + form) | `src/app/(auth)/layout.tsx`, `src/components/auth-showcase.tsx`, `login-form.tsx`, `(auth)/register/page.tsx`, `password-input.tsx` |
 | Gym: workout page (sets editor) | `src/app/(app)/trening/[id]/page.tsx`, `src/components/workout-sets.tsx` |

@@ -159,8 +159,9 @@ def build(args, secret):
     # Workout-only signals, one value per day. Type names come from a shortcut built
     # in the Shortcuts app ("Typy"), not guessed.
     # A type with no samples at all in the window makes Shortcuts show a blocking
-    # "no samples found" alert, which would stall the background automation — so only
-    # request signals the user actually records (--signals).
+    # "no samples found" alert, which stalls the background automation. Workout signals
+    # are empty most weeks (no ride, no swim), so they fill missing days with 0 — the
+    # server stores non-positive values as null.
     def per_day(type_name, unit=None, **extra):
         options = {"WFHKSampleFilteringGroupBy": "Day", **extra}
         if unit:
@@ -170,11 +171,11 @@ def build(args, secret):
     exercise = per_day("Exercise Time", "min")
     signals = {}
     if "cycling" in args.signals:
-        signals["cycling_km"] = per_day("Cycling Distance", "km")
+        signals["cycling_km"] = per_day("Cycling Distance", "km", WFHKSampleFilteringFillMissing=True)
     if "swimming" in args.signals:
-        signals["swimming_m"] = per_day("Swimming Distance", "m")
+        signals["swimming_m"] = per_day("Swimming Distance", "m", WFHKSampleFilteringFillMissing=True)
     if "running" in args.signals:
-        # Unit left to Health's default; fill missing days so an empty week isn't "no samples".
+        # Unit left to Health's default.
         signals["running_speed"] = per_day("Running Speed", WFHKSampleFilteringFillMissing=True)
 
     def field(key, value, item_type=0):  # item_type: 0 text, 3 number
@@ -221,8 +222,8 @@ def main():
     p.add_argument("--url", default=PROD_URL)
     p.add_argument("--days", type=int, default=7, help="window for calories + resting HR")
     p.add_argument("--sleep-days", type=int, default=7, help="window for raw sleep samples (keep small)")
-    p.add_argument("--signals", type=lambda v: set(v.split(",")), default={"cycling", "running"},
-                   help="workout signals to request: cycling,running,swimming (default: cycling,running)")
+    p.add_argument("--signals", type=lambda v: set(v.split(",")), default={"cycling", "running", "swimming"},
+                   help="workout signals to request: cycling,running,swimming (default: all)")
     p.add_argument("--hr-source", help='only resting HR from this source, e.g. "Apple Watch (Name)"')
     p.add_argument("--name", default="Watch Sync v2", help="shortcut name (= output file name)")
     p.add_argument("--show-result", action="store_true", help="show the server response (manual runs)")
