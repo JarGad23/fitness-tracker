@@ -76,3 +76,17 @@ measuring. `auth()` with JWT only decrypts a cookie. The real causes were Vercel
 146 ms for two `select 1` vs 51 ms batched, 48 ms per sequential query from the Mac).
 **Better:** Time each step (`performance.now()` around queries, `x-vercel-id` for the function
 region) before explaining slowness. Keep the function region next to the DB.
+
+### `npm run build` leaves a service worker that poisons dev
+**Avoid:** Blaming a hydration mismatch on HMR and restarting dev. After `npm run build`,
+`public/sw.js` (Serwist) gets served by `next dev` too; once registered it serves cached JS
+chunks, so the browser runs old client code against a fresh server render. A restart doesn't help.
+**Better:** When a mismatch diff shows the *client* side as the old code, check
+`navigator.serviceWorker.getRegistrations()` + `caches.keys()` first; unregister and clear
+before testing in dev after a production build.
+
+### drizzle-kit drops FK actions on ALTER TABLE ADD (SQLite)
+**Avoid:** Trusting generated SQL for a new FK column — `references(..., { onDelete: "set null" })`
+came out as a bare `REFERENCES plan_days(id)`.
+**Better:** Read every generated migration; add the `ON DELETE …` by hand before `db:migrate`.
+

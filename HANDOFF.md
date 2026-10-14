@@ -100,14 +100,18 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | Auth screens (split: showcase + form) | `src/app/(auth)/layout.tsx`, `src/components/auth-showcase.tsx`, `login-form.tsx`, `(auth)/register/page.tsx`, `password-input.tsx` |
 | Gym: workout page (sets editor) | `src/app/(app)/trening/[id]/page.tsx`, `src/components/workout-sets.tsx` |
 | Gym: exercise history | `src/app/(app)/cwiczenie/[id]/page.tsx` |
+| Gym: exercise name suggestions + "Czy chodziło o…?" (pure fns) | `src/lib/gym.ts` (`matchExercises`, `findSimilarExercise`) |
 | Gym: actions / helpers / dashboard prompt | `src/actions/gym.ts`, `src/lib/gym.ts`, `src/components/gym-prompts.tsx` |
+| Training plan: rotation + double progression (pure fns) | `src/lib/plan.ts` |
+| Training plan: dashboard card, day picker, warm-up/cardio checklist | `src/components/plan-workout.tsx`; read-only plan at `src/app/(app)/plan/page.tsx` |
+| Training plan import (JSON → DB, one user) | `scripts/seed-plan.ts`, plan files in `scripts/plans/` |
 | DB schema | `src/lib/db/schema.ts` |
 
 ---
 
 ## 7. Database
 
-Turso (libSQL). Eight tables.
+Turso (libSQL). Twelve tables.
 
 - **users**: id, email, password_hash, created_at
 - **activity_types**: id, user_id→users, name, target_per_week, icon (lucide name), **color (hex, nullable)**, **health_kind** (`cycling` | `swimming` | `running` = auto-created from watch signals; `strength` = gym: sets logging + dashboard confirm prompt; null = manual), sort_order, created_at
@@ -119,7 +123,13 @@ Turso (libSQL). Eight tables.
 - **coach_reports**: id, user_id→users (cascade), body (Markdown), model, period_start/period_end (ISO, nullable), targets (JSON `[{ name, targetPerWeek }]`, names stored in the user's spelling), applied_at (null = not applied), created_at. Index (user_id, created_at). Written only by `POST /api/ai/reports`; `applied_at` set by the "Zastosuj cele" action.
 - **day_notes**: id, user_id→users (cascade), date, tags (JSON array of keys from `DAY_TAGS`, stored in list order), text (≤ 500, nullable), created_at, updated_at. **Unique (user_id, date)**; a note with no tags and no text is deleted, never stored empty. Separate from `health_metrics.notes` on purpose: that row belongs to the webhook upsert, and a note must exist on days without watch data.
 
-Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`), `0007` (`coach_reports`), `0008` (`day_notes`). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
+- **training_plans**: id, user_id→users (cascade), name, notes (JSON `[{ title, body }]`: reading material on `/plan`), created_at. The app uses the newest one.
+- **plan_days**: id, plan_id (cascade), label ("A"), name, position.
+- **plan_exercises**: id, plan_day_id (cascade), exercise_id→exercises (cascade), position, sets, rep_min, rep_max, superset (same number on neighbours = superset), alternative, tips. `renameExercise`'s merge re-points these to the surviving exercise, otherwise the cascade would drop them from the plan.
+- **plan_checklist**: id, plan_id (cascade), section (`warmup` | `cardio` | `home`), position, title, detail.
+- Plan columns elsewhere: `workouts.plan_day_id` (→ plan_days, **ON DELETE SET NULL** — drizzle-kit drops the action from `ALTER TABLE ADD`, so 0009 was fixed by hand), `workouts.plan_checks` (JSON ids of ticked checklist items), `exercises.unit` (`reps` | `sec`; `sec` = `workout_sets.reps` holds seconds, e.g. plank).
+
+Migrations in `drizzle/`: `0000` (initial), `0001` (workouts.duration), `0002` (activity_types.color), `0003` (health_metrics + workouts.feeling_score), `0004` (health_metrics unique index), `0005` (watch workout signals, `workouts.source`, `activity_types.health_kind`), `0006` (gym: `exercises`, `workout_sets`, `gym_prompt_dismissed`, Siłownia → `strength`), `0007` (`coach_reports`), `0008` (`day_notes`), `0009` (training plan tables + the three columns above). **All are applied to the live DB** — verified by querying it, not by trusting the notes.
 
 **Migrations run through drizzle now:** `npm run db:generate` → review the SQL → `npm run db:migrate`. `__drizzle_migrations` was baselined on 2026-09-25 (all earlier migrations had been applied by hand); drizzle applies every journal entry whose `when` is newer than the last row there.
 
@@ -165,6 +175,14 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - `DayNoteEditor`: tags save on tap, text 800 ms after typing stops and on blur; saves are queued; server data is adopted only when idle and the text isn't mid-edit. A date outside the page's loaded range is fetched first (`loadDayNote`) so a save can't overwrite a note it never saw.
 - AI: `/api/ai/context` gets `day_notes`, `day_tag_legend` and per-week `day_tags` counts (additive, still `version: 1`); the Gemini export lists "Notatki dnia" per week and the prompt tells the coach to use them to explain outliers.
 
+**Training plan A/B/C (2026-10-14):** Gemini's FBW plan, imported with `scripts/seed-plan.ts` (`npx tsx --env-file=.env scripts/seed-plan.ts <email> scripts/plans/fbw-abc.json`; refuses a name the user already has; restart dev / wait out `cacheLife` after seeding).
+- Rotation is derived, never stored: next day = the day after the `plan_day_id` of the newest workout (by date) that has one.
+- Dashboard: "Następny trening: B · …" → "Zacznij" (`startPlanWorkout`: today's gym workout, reusing one already logged today) or "Kontynuuj" when today's gym session exists.
+- `/trening/[id]` with a plan day: cards in plan order (supersets framed, labelled 5a/5b), planned sets as dimmed "ghost" rows prefilled by `suggestSets` — ticking ✓ saves a real set via `addSet`; edits to a ghost stay on the client. Nothing planned is written until it's done, so tonnage/history/AI only see real sets. A gym session without a plan day and without sets (watch "Tak", modal) shows a day picker (next one highlighted); "Zmień" clears the day while nothing is logged.
+- Double progression (`src/lib/plan.ts`): working sets = last session's sets at its heaviest weight; all ≥ planned count and at the top of the range → +2.5 kg at the bottom of the range, else same weight with last reps (clamped to the range). No history → empty weight ("kg" placeholder).
+- Warm-up and cardio checklists tick into `workouts.plan_checks` (client sends the full list). `/plan` shows days, checklists (incl. the home shoulder routine) and notes. Desktop sidebar link only — the mobile header has no room for a fifth icon; phones reach it from the dashboard card.
+- AI context: `exercises[].unit` added (additive, still `version: 1`).
+
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"
 curl -X POST -H "Authorization: Bearer $AI_API_SECRET" -H 'Content-Type: application/json' \
@@ -179,7 +197,7 @@ curl -X POST -H "Authorization: Bearer $AI_API_SECRET" -H 'Content-Type: applica
 - Gym phase end-to-end on a throwaway user (details in `tasks/todo.md` Review), incl. 390 px layout and the webhook dry run.
 
 ### TODO / next steps
-1. **Deploy to Vercel** — set `AUTH_URL`, `WATCH_SYNC_SECRET` **and `AI_API_SECRET`** (without them the matching routes 500).
+1. **Deployed on Vercel** (functions in `dub1`). Env needed there: `AUTH_URL`, `WATCH_SYNC_SECRET`, `AI_API_SECRET` (without them the matching routes 500).
 2. **Apple Shortcuts — "Watch Sync v2"** (2026-09-25, verified against the Health app on real data). The shortcut does no math: it sends the last 7 days as text lines and the server aggregates (`src/lib/health-sync.ts`). Payload: `{ version: 2, user_email, today, active_calories: "YYYY-MM-DD;kcal\n…" (grouped by day), resting_hr: "YYYY-MM-DD;bpm\n…" (raw, averaged per day), sleep: "start;end;stage\n…" (raw, overlapping intervals merged, "Czuwanie"/"W łóżku" skipped, night assigned to wake-up day) }`. Every run re-sends the week, so missed runs self-heal and today's partial values get overwritten next day. `?dry=1` parses without writing; `WATCH_SYNC_DEBUG=1` logs the raw payload. The v1 single-day payload `{ date, active_calories, resting_hr, sleep_hours, user_email }` still works; non-positive values are stored as null.
    - **Shortcuts date-filter gotcha:** in the `.wflow` plist, `Start Date` operator `1002` means **"is today"** (the Number is ignored) and `1001` + `Unit 16` means **"in the last N days"**. The v1 shortcut used `1002` believing it was "last 7 days" — that's why it only ever sent morning calories.
    - Shortcuts **cannot read workouts**. Instead the payload carries workout-only signals (`cycling_km`, `swimming_m`, `running_speed`, plus `exercise_minutes`), stored per day in `health_metrics`. `detectWorkouts()` creates a `workouts` row with `source = "watch"` for the activity whose `activity_types.health_kind` matches — only when that day's signal **first crosses its threshold**, and only if the day has no workout of that activity yet. So re-sending the week never duplicates, and a workout the user deletes never comes back. Gym has no workout-only signal and stays manual.

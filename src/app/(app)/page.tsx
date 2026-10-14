@@ -18,8 +18,12 @@ import {
   getCachedGymPrompts,
   getCachedDayNotesInRange,
   getCachedHealthMetricsInRange,
+  getCachedTrainingPlan,
+  getCachedLastPlanDayId,
 } from "@/lib/queries";
 import { GymPrompts } from "@/components/gym-prompts";
+import { NextWorkoutCard } from "@/components/plan-workout";
+import { nextPlanDay } from "@/lib/plan";
 import { DayNoteEditor } from "@/components/day-note-editor";
 import { auth } from "@/lib/auth";
 import { startOfWeek, startOfMonth, endOfMonth, endOfWeek, parseISO } from "date-fns";
@@ -136,6 +140,36 @@ async function GymPromptsSection({ searchParams }: { searchParams: SearchParams 
   if (!userId) return null;
   const prompts = await getCachedGymPrompts(userId, weekStartDate, weekEndDate);
   return <GymPrompts prompts={prompts} />;
+}
+
+// Always about today, whichever week the calendar shows.
+async function NextWorkoutSection() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+  const today = todayISO();
+  const [plan, lastPlanDayId, todayWorkouts] = await Promise.all([
+    getCachedTrainingPlan(userId),
+    getCachedLastPlanDayId(userId),
+    getCachedWorkoutsInRange(userId, today, today),
+  ]);
+  if (!plan || plan.days.length === 0) return null;
+
+  const gymToday = todayWorkouts.find((w) => w.activityType.healthKind === "strength");
+  const day = nextPlanDay(plan.days, lastPlanDayId)!;
+  const todayDay = plan.days.find((d) => d.id === gymToday?.planDayId);
+
+  return (
+    <NextWorkoutCard
+      day={{ id: day.id, label: day.label, name: day.name }}
+      exerciseNames={day.exercises.map((e) => e.exercise.name)}
+      todayWorkout={
+        gymToday
+          ? { id: gymToday.id, label: todayDay ? `${todayDay.label} · ${todayDay.name}` : null }
+          : null
+      }
+    />
+  );
 }
 
 async function WeekNav({ searchParams }: { searchParams: SearchParams }) {
@@ -270,6 +304,10 @@ export default function DashboardPage({
       <div className="lg:grid lg:grid-cols-3 lg:gap-6">
         {/* Calendar Section */}
         <div className="lg:col-span-2 space-y-4">
+          <Suspense fallback={<div className="h-24 rounded-xl bg-muted/30 animate-pulse" />}>
+            <NextWorkoutSection />
+          </Suspense>
+
           {/* No skeleton: usually empty, and a placeholder would shift the page. */}
           <Suspense>
             <GymPromptsSection searchParams={searchParams} />

@@ -102,6 +102,7 @@ export function buildAIContext(input: {
         w.sets.length > 0
           ? groupSetsByExercise(w.sets).map((g) => ({
               name: g.exercise.name,
+              unit: g.exercise.unit, // "sec": reps holds seconds (plank)
               sets: g.sets.map((s) => ({ reps: s.reps, weight_kg: s.weightKg })),
             }))
           : null,

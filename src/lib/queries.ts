@@ -8,8 +8,9 @@ import {
   workoutSets,
   coachReports,
   dayNotes,
+  trainingPlans,
 } from "@/lib/db/schema";
-import { eq, and, gte, lte, ne, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, ne, desc, sql, inArray, isNotNull } from "drizzle-orm";
 import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
 
 // Runtime auth (cookies) is read by the caller and the user id is passed in as an
@@ -132,6 +133,7 @@ export async function getCachedExercises(
     .select({
       id: exercises.id,
       name: exercises.name,
+      unit: exercises.unit,
       lastDate: sql<string | null>`${last("w.date")}`,
       lastReps: sql<number | null>`${last("s.reps")}`,
       lastWeightKg: sql<number | null>`${last("s.weight_kg")}`,
@@ -239,6 +241,95 @@ export async function getCachedGymPrompts(
       )
     )
     .orderBy(healthMetrics.date);
+}
+
+// --- Training plan ------------------------------------------------------------------
+
+// The newest plan with days, exercises and checklist in order. Tagged "gym" too: an
+// exercise rename/merge changes what the plan shows. The seed script writes directly,
+// so restart dev (or wait out cacheLife) after seeding.
+export async function getCachedTrainingPlan(userId: string) {
+  "use cache";
+  cacheTag("plan", "gym");
+  cacheLife("hours");
+
+  const plan = await db.query.trainingPlans.findFirst({
+    where: eq(trainingPlans.userId, userId),
+    orderBy: [desc(trainingPlans.createdAt)],
+    with: {
+      days: {
+        orderBy: (d, { asc }) => [asc(d.position)],
+        with: {
+          exercises: {
+            orderBy: (e, { asc }) => [asc(e.position)],
+            with: { exercise: true },
+          },
+        },
+      },
+      checklist: { orderBy: (c, { asc }) => [asc(c.position)] },
+    },
+  });
+  return plan ?? null;
+}
+
+export type TrainingPlanFull = NonNullable<Awaited<ReturnType<typeof getCachedTrainingPlan>>>;
+
+// Plan day of the newest session that followed the plan: the rotation continues from it.
+export async function getCachedLastPlanDayId(userId: string) {
+  "use cache";
+  cacheTag("workouts");
+  cacheLife("hours");
+
+  const [row] = await db
+    .select({ planDayId: workouts.planDayId })
+    .from(workouts)
+    .where(and(eq(workouts.userId, userId), isNotNull(workouts.planDayId)))
+    .orderBy(desc(workouts.date), desc(workouts.createdAt))
+    .limit(1);
+  return row?.planDayId ?? null;
+}
+
+// Per exercise: every set of its newest session before this workout (up to its date),
+// for the double-progression suggestion.
+export async function getCachedLastSessionSets(
+  userId: string,
+  workoutId: string,
+  date: string,
+  exerciseIds: string[]
+) {
+  "use cache";
+  cacheTag("gym", "workouts");
+  cacheLife("hours");
+
+  if (exerciseIds.length === 0) return {};
+  const rows = await db
+    .select({
+      exerciseId: workoutSets.exerciseId,
+      workoutId: workouts.id,
+      reps: workoutSets.reps,
+      weightKg: workoutSets.weightKg,
+    })
+    .from(workoutSets)
+    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .where(
+      and(
+        eq(workouts.userId, userId),
+        ne(workouts.id, workoutId),
+        lte(workouts.date, date),
+        inArray(workoutSets.exerciseId, exerciseIds)
+      )
+    )
+    .orderBy(desc(workouts.date), desc(workouts.createdAt), workoutSets.position);
+
+  // Rows come newest session first: keep only the first session seen per exercise.
+  const result: Record<string, { reps: number; weightKg: number | null }[]> = {};
+  const sessionOf: Record<string, string> = {};
+  for (const row of rows) {
+    sessionOf[row.exerciseId] ??= row.workoutId;
+    if (sessionOf[row.exerciseId] !== row.workoutId) continue;
+    (result[row.exerciseId] ??= []).push({ reps: row.reps, weightKg: row.weightKg });
+  }
+  return result;
 }
 
 // --- AI coach API ---------------------------------------------------------------

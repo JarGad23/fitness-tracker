@@ -8,6 +8,9 @@ import {
   activityTypes,
   healthMetrics,
   dayNotes,
+  planDays,
+  planExercises,
+  trainingPlans,
 } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -16,6 +19,7 @@ import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { GYM_PROMPT_MIN_MINUTES, exerciseKey } from "@/lib/gym";
 import { DAY_NOTE_MAX_LENGTH, DAY_TAGS } from "@/lib/day-notes";
+import { todayISO } from "@/lib/utils";
 
 // Set and exercise ids are generated on the client, so an optimistic set (or a new
 // exercise's "+ Seria") works before the server round-trip finishes. They're
@@ -179,6 +183,11 @@ export async function renameExercise(exerciseId: string, name: string) {
         .update(workoutSets)
         .set({ exerciseId: twin.id })
         .where(eq(workoutSets.exerciseId, exerciseId)),
+      // Without this the delete below would cascade the exercise out of the plan.
+      db
+        .update(planExercises)
+        .set({ exerciseId: twin.id })
+        .where(eq(planExercises.exerciseId, exerciseId)),
       db.delete(exercises).where(eq(exercises.id, exerciseId)),
     ]);
   } else if (exercise.name !== cleanName) {
@@ -287,4 +296,71 @@ export async function dismissGymPrompt(date: string, what = "") {
       set: { tags, text, updatedAt: new Date() },
     });
   updateTag("day-notes");
+}
+
+// --- Training plan ---------------------------------------------------------------
+
+async function requireOwnPlanDay(userId: string, planDayId: string) {
+  const [day] = await db
+    .select({ id: planDays.id })
+    .from(planDays)
+    .innerJoin(trainingPlans, eq(trainingPlans.id, planDays.planId))
+    .where(and(eq(planDays.id, planDayId), eq(trainingPlans.userId, userId)));
+  if (!day) throw new Error("Nie znaleziono dnia planu");
+}
+
+// "Zacznij trening B": today's gym session following that plan day. Reuses a gym
+// session already logged today (e.g. from the watch prompt) instead of adding a second.
+export async function startPlanWorkout(planDayId: string) {
+  const userId = await requireUserId();
+  await requireOwnPlanDay(userId, planDayId);
+  const strength = await db.query.activityTypes.findFirst({
+    where: and(eq(activityTypes.userId, userId), eq(activityTypes.healthKind, "strength")),
+  });
+  if (!strength) throw new Error("Brak aktywności siłowej w ustawieniach");
+
+  const date = todayISO();
+  const existing = await db.query.workouts.findFirst({
+    where: and(
+      eq(workouts.userId, userId),
+      eq(workouts.date, date),
+      eq(workouts.activityTypeId, strength.id)
+    ),
+  });
+
+  let id = existing?.id;
+  if (!id) {
+    id = uuid();
+    await db.insert(workouts).values({ id, userId, activityTypeId: strength.id, date, planDayId });
+  } else if (!existing?.planDayId) {
+    await db.update(workouts).set({ planDayId }).where(eq(workouts.id, id));
+  }
+
+  updateTag("workouts");
+  redirect(`/trening/${id}`);
+}
+
+// Picks (or clears) the plan day of a session started without one.
+export async function setWorkoutPlanDay(workoutId: string, planDayId: string | null) {
+  const userId = await requireUserId();
+  await requireOwnWorkout(userId, workoutId);
+  if (planDayId) await requireOwnPlanDay(userId, planDayId);
+
+  await db.update(workouts).set({ planDayId }).where(eq(workouts.id, workoutId));
+  updateTag("workouts");
+}
+
+// The client sends the whole list of ticked warm-up/cardio items: quick taps can't
+// interleave into a lost update the way a server-side toggle could.
+export async function setPlanChecks(workoutId: string, itemIds: string[]) {
+  const userId = await requireUserId();
+  if (itemIds.length > 100) throw new Error("Za dużo pozycji");
+  itemIds.forEach(checkId);
+
+  const result = await db
+    .update(workouts)
+    .set({ planChecks: [...new Set(itemIds)] })
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)));
+  if (result.rowsAffected === 0) throw new Error("Nie znaleziono treningu");
+  updateTag("workouts");
 }

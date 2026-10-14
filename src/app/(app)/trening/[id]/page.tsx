@@ -9,10 +9,14 @@ import {
   getCachedWorkoutWithSets,
   getCachedExercises,
   getCachedPreviousStrengthSession,
+  getCachedTrainingPlan,
+  getCachedLastPlanDayId,
+  getCachedLastSessionSets,
 } from "@/lib/queries";
 import { groupSetsByExercise } from "@/lib/gym";
+import { nextPlanDay, suggestSets } from "@/lib/plan";
 import { capitalizeFirst } from "@/lib/utils";
-import { WorkoutSets, type EditorSet } from "@/components/workout-sets";
+import { WorkoutSets, type EditorSet, type WorkoutPlan } from "@/components/workout-sets";
 
 type Params = Promise<{ id: string }>;
 
@@ -25,12 +29,54 @@ async function WorkoutSection({ params }: { params: Params }) {
   const workout = await getCachedWorkoutWithSets(userId, id);
   if (!workout || workout.activityType.healthKind !== "strength") notFound();
 
-  const [exercises, previous] = await Promise.all([
+  const [exercises, previous, trainingPlan] = await Promise.all([
     getCachedExercises(userId, workout.id, workout.date),
     workout.sets.length === 0
       ? getCachedPreviousStrengthSession(userId, workout.id, workout.date)
       : null,
+    getCachedTrainingPlan(userId),
   ]);
+
+  // A session from an older plan (or none) shows no plan, just its sets.
+  const planDay = trainingPlan?.days.find((d) => d.id === workout.planDayId) ?? null;
+  const lastSessions = planDay
+    ? await getCachedLastSessionSets(
+        userId,
+        workout.id,
+        workout.date,
+        planDay.exercises.map((e) => e.exerciseId)
+      )
+    : {};
+  const plan: WorkoutPlan | null =
+    trainingPlan && planDay
+      ? {
+          dayLabel: planDay.label,
+          dayName: planDay.name,
+          items: planDay.exercises.map((e) => ({
+            id: e.id,
+            exerciseId: e.exerciseId,
+            exerciseName: e.exercise.name,
+            unit: e.exercise.unit,
+            sets: e.sets,
+            repMin: e.repMin,
+            repMax: e.repMax,
+            superset: e.superset,
+            alternative: e.alternative,
+            tips: e.tips,
+            suggestion: suggestSets(e, lastSessions[e.exerciseId] ?? null, e.exercise.unit),
+          })),
+          warmup: trainingPlan.checklist.filter((c) => c.section === "warmup"),
+          cardio: trainingPlan.checklist.filter((c) => c.section === "cardio"),
+          checks: workout.planChecks ?? [],
+        }
+      : null;
+  const dayChoice =
+    trainingPlan && !planDay && workout.sets.length === 0
+      ? {
+          days: trainingPlan.days.map(({ id, label, name }) => ({ id, label, name })),
+          nextId: nextPlanDay(trainingPlan.days, await getCachedLastPlanDayId(userId))?.id ?? null,
+        }
+      : null;
 
   const date = parseISO(workout.date);
   const sets: EditorSet[] = workout.sets.map((s) => ({
@@ -70,6 +116,8 @@ async function WorkoutSection({ params }: { params: Params }) {
         workoutId={workout.id}
         sets={sets}
         exercises={exercises}
+        plan={plan}
+        dayChoice={dayChoice}
         previous={
           previous
             ? {

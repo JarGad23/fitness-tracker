@@ -6,7 +6,7 @@ import { pl } from "date-fns/locale";
 import { Trophy } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getCachedExerciseHistory } from "@/lib/queries";
-import { formatSet, formatWeight } from "@/lib/gym";
+import { formatReps, formatSet, formatWeight } from "@/lib/gym";
 import { capitalizeFirst, pluralPl } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -55,7 +55,9 @@ async function HistorySection({ params }: { params: Params }) {
             <div>
               <p className="text-sm text-muted-foreground">Najlepsza seria</p>
               <p className="text-lg font-bold">
-                {formatWeight(record.weightKg)} × {record.reps}
+                {exercise.unit === "sec" && record.weightKg == null
+                  ? formatReps(record.reps, "sec")
+                  : `${formatWeight(record.weightKg)} × ${formatReps(record.reps, exercise.unit)}`}
               </p>
             </div>
           </CardContent>
@@ -77,10 +79,14 @@ async function HistorySection({ params }: { params: Params }) {
                       {capitalizeFirst(format(parseISO(s.date), "EEE d MMM", { locale: pl }))}
                     </span>
                     <span className="flex-1 min-w-0 text-sm text-muted-foreground tabular-nums truncate">
-                      {s.sets.map(formatSet).join(", ")}
+                      {s.sets.map((set) => formatSet(set, exercise.unit)).join(", ")}
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums">
-                      {best.weightKg == null ? `${best.reps} powt.` : formatWeight(best.weightKg)}
+                      {best.weightKg != null
+                        ? formatWeight(best.weightKg)
+                        : exercise.unit === "sec"
+                          ? formatReps(best.reps, "sec")
+                          : `${best.reps} powt.`}
                     </span>
                   </Link>
                 </li>

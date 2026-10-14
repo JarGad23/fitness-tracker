@@ -1,3 +1,42 @@
+# Exercise name suggestions + typo check (2026-10-14)
+
+- [x] `searchKey` (case + accents, ł→l), `matchExercises` (typed words as substrings),
+      `findSimilarExercise` (every meaningful word ↔ a counterpart: same / prefix / shared
+      5-letter prefix / 1–2 edits incl. swaps; or the same letters without spaces)
+- [x] Own suggestion list instead of `<datalist>` (iOS); "Czy chodziło o…?" before adding a
+      near-duplicate — nothing merges without a tap; recent chips when the field is empty
+- [x] Verify: 13 name cases in a script; browser (real typing): "łyd" → suggestion added;
+      "wzonsy hantlami na bok" → prompt → existing used, no new row in DB; "…siedząc" → new,
+      no prompt; 390 px prompt fits; test user logged out + deleted
+
+# Training plan A/B/C (2026-10-14)
+
+Gemini plan (FBW A/B/C, double progression, warm-up, cardio, home shoulder routine) imported
+into the app: "Zacznij trening B" on the phone, sets prefilled, check off to save.
+
+- [x] Migration 0009: training_plans, plan_days, plan_exercises, plan_checklist,
+      workouts.plan_day_id/plan_checks, exercises.unit
+- [x] `src/lib/plan.ts`: rotation + double progression suggestions
+- [x] Queries + actions (start, pick day, toggle check); merge keeps plan rows
+- [x] Dashboard "Następny trening" card
+- [x] Workout page: day picker, ghost sets, supersets, warm-up/cardio checklist
+- [x] `/plan` page + nav
+- [x] `scripts/plans/fbw-abc.json` + `scripts/seed-plan.ts`
+- [x] Seconds unit everywhere sets are formatted
+- [x] Verify: migrate, tsc, lint, build, throwaway user desktop + 390 px
+- [x] Seed the plan on Jarek's account; HANDOFF
+
+## Review
+- Throwaway user, desktop + 390 px (iframe): next day A after a C session; bench 4×8 @ 80 →
+  "82,5 × 5, +2,5 kg"; ✓ saved 85×5 (DB checked), later ghosts follow 85; reload keeps sets
+  and ticks; watch-style session → picker with B highlighted → plank "3 × 45–60 s", 50 s on the
+  history page; merge of a plan exercise keeps all 18 plan rows; dashboard "Kontynuuj";
+  /plan and dashboard no horizontal scroll. User logged out + deleted, no orphan rows.
+- 0009 needed a hand fix: drizzle-kit dropped `ON DELETE set null` from the ALTER TABLE FK.
+- A hydration mismatch in dev came from the Serwist SW (public/sw.js left by `npm run build`)
+  serving stale JS chunks on localhost — not app code; gone after unregistering it.
+- Not done (out of v1): plan editing / JSON import in the UI, AI-generated plans, rest timer.
+
 # Workout sets page: rename, speed, layout, hovers (2026-10-06)
 
 - [x] Rename exercise (pencil → input, Enter/blur saves, Esc cancels); renaming to an existing

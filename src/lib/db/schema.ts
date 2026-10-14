@@ -50,6 +50,11 @@ export const workouts = sqliteTable("workouts", {
   feelingScore: integer("feeling_score"), // optional 1-5 self-rating
   // "manual" (logged in the app) | "watch" (auto-created from Apple Health data)
   source: text("source").notNull().default("manual"),
+  // Training plan day this gym session follows (null = free session). Set null when
+  // the plan goes, so the session and its sets stay.
+  planDayId: text("plan_day_id").references(() => planDays.id, { onDelete: "set null" }),
+  // Ids of the plan checklist items (warm-up, cardio) ticked off in this session.
+  planChecks: text("plan_checks", { mode: "json" }).$type<string[]>(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -99,6 +104,8 @@ export const exercises = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    // "reps" | "sec": a timed exercise (plank) stores seconds in workout_sets.reps.
+    unit: text("unit").$type<"reps" | "sec">().notNull().default("reps"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -178,6 +185,77 @@ export const dayNotes = sqliteTable(
   (table) => [uniqueIndex("day_notes_user_date_unique").on(table.userId, table.date)]
 );
 
+// Training plan (e.g. FBW A/B/C), imported with scripts/seed-plan.ts. The next day to
+// do is derived from the newest workout with a plan_day_id, never stored.
+export const trainingPlans = sqliteTable(
+  "training_plans",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Reading material shown on /plan: rules, swimming, nutrition.
+    notes: text("notes", { mode: "json" }).$type<{ title: string; body: string }[]>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("training_plans_user_idx").on(table.userId)]
+);
+
+export const planDays = sqliteTable(
+  "plan_days",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => trainingPlans.id, { onDelete: "cascade" }),
+    label: text("label").notNull(), // "A"
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => [index("plan_days_plan_idx").on(table.planId)]
+);
+
+export const planExercises = sqliteTable(
+  "plan_exercises",
+  {
+    id: text("id").primaryKey(),
+    planDayId: text("plan_day_id")
+      .notNull()
+      .references(() => planDays.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    sets: integer("sets").notNull(),
+    repMin: integer("rep_min").notNull(),
+    repMax: integer("rep_max").notNull(),
+    // Neighbours with the same number form a superset (5a + 5b).
+    superset: integer("superset"),
+    alternative: text("alternative"),
+    tips: text("tips"),
+  },
+  (table) => [index("plan_exercises_day_idx").on(table.planDayId)]
+);
+
+// Warm-up, post-workout cardio and the home routine: ticked off, not logged as sets.
+export const planChecklist = sqliteTable(
+  "plan_checklist",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => trainingPlans.id, { onDelete: "cascade" }),
+    section: text("section").$type<"warmup" | "cardio" | "home">().notNull(),
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+  },
+  (table) => [index("plan_checklist_plan_idx").on(table.planId)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
@@ -186,6 +264,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   exercises: many(exercises),
   coachReports: many(coachReports),
   dayNotes: many(dayNotes),
+  trainingPlans: many(trainingPlans),
 }));
 
 export const activityTypesRelations = relations(activityTypes, ({ one, many }) => ({
@@ -205,6 +284,7 @@ export const workoutsRelations = relations(workouts, ({ one, many }) => ({
     fields: [workouts.activityTypeId],
     references: [activityTypes.id],
   }),
+  planDay: one(planDays, { fields: [workouts.planDayId], references: [planDays.id] }),
   sets: many(workoutSets),
 }));
 
@@ -239,6 +319,26 @@ export const dayNotesRelations = relations(dayNotes, ({ one }) => ({
   user: one(users, { fields: [dayNotes.userId], references: [users.id] }),
 }));
 
+export const trainingPlansRelations = relations(trainingPlans, ({ one, many }) => ({
+  user: one(users, { fields: [trainingPlans.userId], references: [users.id] }),
+  days: many(planDays),
+  checklist: many(planChecklist),
+}));
+
+export const planDaysRelations = relations(planDays, ({ one, many }) => ({
+  plan: one(trainingPlans, { fields: [planDays.planId], references: [trainingPlans.id] }),
+  exercises: many(planExercises),
+}));
+
+export const planExercisesRelations = relations(planExercises, ({ one }) => ({
+  day: one(planDays, { fields: [planExercises.planDayId], references: [planDays.id] }),
+  exercise: one(exercises, { fields: [planExercises.exerciseId], references: [exercises.id] }),
+}));
+
+export const planChecklistRelations = relations(planChecklist, ({ one }) => ({
+  plan: one(trainingPlans, { fields: [planChecklist.planId], references: [trainingPlans.id] }),
+}));
+
 // Types
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -252,3 +352,7 @@ export type Exercise = typeof exercises.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
 export type CoachReport = typeof coachReports.$inferSelect;
 export type DayNote = typeof dayNotes.$inferSelect;
+export type TrainingPlan = typeof trainingPlans.$inferSelect;
+export type PlanDay = typeof planDays.$inferSelect;
+export type PlanExercise = typeof planExercises.$inferSelect;
+export type PlanChecklistItem = typeof planChecklist.$inferSelect;

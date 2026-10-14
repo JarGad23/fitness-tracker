@@ -6,6 +6,7 @@ import {
   Home,
   CalendarDays,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
@@ -97,6 +98,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <Home className="w-5 h-5" />
                 Dashboard
+              </Button>
+            </Link>
+            <Link href="/plan">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-3 h-12 rounded-xl text-base font-medium"
+              >
+                <ClipboardList className="w-5 h-5" />
+                Plan treningowy
               </Button>
             </Link>
             <Link href="/historia">
