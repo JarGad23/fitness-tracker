@@ -2,10 +2,12 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { applyReportTargets } from "@/actions/ai-sync";
+import { generateReportNow } from "@/actions/coach";
+import { Markdown } from "@/components/markdown";
 import { cn } from "@/lib/utils";
 
 export type CoachReportView = {
@@ -20,17 +22,42 @@ export type CoachReportView = {
 
 export function CoachReport({ report }: { report: CoachReportView | null }) {
   const [isPending, startTransition] = useTransition();
+  const [isGenerating, startGenerating] = useTransition();
+
+  const handleGenerate = () => {
+    startGenerating(async () => {
+      const result = await generateReportNow();
+      if ("error" in result) toast.error(result.error);
+      else toast.success("Nowy raport gotowy");
+    });
+  };
 
   const header = (subtitle: string) => (
     <CardHeader className="pb-3 bg-muted/30 border-b border-border/50">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <Sparkles className="w-5 h-5 text-primary" />
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base font-semibold">Raport trenera</CardTitle>
+            <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <CardTitle className="text-base font-semibold">Raport lokalnego trenera</CardTitle>
-          <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
-        </div>
+        <Button
+          variant="outline"
+          onClick={handleGenerate}
+          disabled={isGenerating}
+          aria-label="Wygeneruj nowy raport"
+          className="rounded-xl gap-2 shrink-0"
+        >
+          {isGenerating ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4" />
+          )}
+          <span className="hidden sm:inline">{isGenerating ? "Generuję…" : "Nowy raport"}</span>
+        </Button>
       </div>
     </CardHeader>
   );
@@ -41,8 +68,9 @@ export function CoachReport({ report }: { report: CoachReportView | null }) {
         {header("Brak raportu")}
         <CardContent className="pt-4">
           <p className="text-sm text-muted-foreground">
-            Lokalny model nie wysłał jeszcze raportu. Pojawi się tutaj po wywołaniu{" "}
-            <code className="text-xs">POST /api/ai/reports</code>.
+            {isGenerating
+              ? "Trener analizuje Twoje dane — to trwa ok. 20 sekund…"
+              : "Nie ma jeszcze raportu. Nowy pojawia się co poniedziałek rano albo po kliknięciu „Nowy raport”."}
           </p>
         </CardContent>
       </Card>
@@ -77,9 +105,12 @@ export function CoachReport({ report }: { report: CoachReportView | null }) {
     <Card className="border-border/50">
       {header(subtitle)}
       <CardContent className="pt-4 space-y-4">
-        <div className="max-h-96 overflow-auto rounded-xl border border-border bg-muted/30 p-4 text-sm whitespace-pre-wrap break-words">
-          {report.body}
-        </div>
+        {isGenerating && (
+          <p className="text-sm text-muted-foreground">
+            Trener analizuje Twoje dane — to trwa ok. 20 sekund…
+          </p>
+        )}
+        <Markdown className="rounded-xl border border-border bg-muted/30 p-4">{report.body}</Markdown>
 
         {report.targets.length > 0 && (
           <div className="space-y-3">

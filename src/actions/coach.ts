@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { COACH_BRIEF_MAX_LENGTH } from "@/lib/ai/limits";
+import { aiErrorMessage } from "@/lib/ai/provider";
+import { generateWeeklyReport } from "@/lib/ai/report";
+import { todayISO } from "@/lib/utils";
 
 async function requireUserId() {
   const session = await auth();
@@ -21,4 +24,16 @@ export async function saveCoachBrief(text: string) {
     .set({ coachBrief: text.trim() || null })
     .where(eq(users.id, userId));
   updateTag("coach-brief");
+}
+
+export async function generateReportNow(): Promise<{ ok: true } | { error: string }> {
+  const userId = await requireUserId();
+  try {
+    await generateWeeklyReport(userId, todayISO());
+  } catch (error) {
+    console.error("generateReportNow failed:", error);
+    return { error: aiErrorMessage(error) };
+  }
+  updateTag("coach-reports");
+  return { ok: true };
 }

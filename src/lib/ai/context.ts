@@ -36,7 +36,11 @@ export type LoadedPlan = NonNullable<Awaited<ReturnType<typeof loadTrainingPlan>
 
 /** The plan as readable text: days, exercises with sets × reps, checklist, rules. */
 export function formatPlan(plan: LoadedPlan, { withIds = false } = {}) {
-  const lines = [`Plan: ${plan.name}`];
+  const since = plan.createdAt.toISOString().slice(0, 10);
+  const lines = [
+    `Plan: ${plan.name}`,
+    `Obowiązuje od ${since}. Treningów sprzed tej daty nie oceniaj względem planu — wtedy go jeszcze nie było.`,
+  ];
   for (const day of plan.days) {
     lines.push("", `Dzień ${day.label} — ${day.name}`);
     day.exercises.forEach((e, i) => {

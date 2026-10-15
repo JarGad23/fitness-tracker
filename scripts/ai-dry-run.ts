@@ -2,6 +2,7 @@
 // Read-only: nothing is written (not even the ai_calls log) — for tuning prompts.
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> context
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> ask "Jak mi idzie klatka?"
+//   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> report [YYYY-MM-DD as today]
 import { eq } from "drizzle-orm";
 import { db } from "../src/lib/db";
 import { users } from "../src/lib/db/schema";
@@ -11,6 +12,7 @@ import { coachSystemPrompt } from "../src/lib/ai/prompts";
 import { AI_MODELS, AI_THINKING, estimateCostUsd } from "../src/lib/ai/models";
 import type { AIUsage } from "../src/lib/ai/provider";
 import { todayISO } from "../src/lib/utils";
+import { draftWeeklyReport } from "../src/lib/ai/report";
 
 function printUsage(model: string, usage: AIUsage, ms: number) {
   const cost = estimateCostUsd(model, usage.inputTokens, usage.outputTokens);
@@ -23,7 +25,7 @@ function printUsage(model: string, usage: AIUsage, ms: number) {
 async function main() {
   const [email, task, ...rest] = process.argv.slice(2);
   if (!email || !task) {
-    console.error("Usage: ai-dry-run.ts <email> <context|ask> [args]");
+    console.error("Usage: ai-dry-run.ts <email> <context|ask|report> [args]");
     process.exit(1);
   }
 
@@ -50,6 +52,13 @@ async function main() {
     });
     console.log(text);
     printUsage(model, usage, performance.now() - started);
+  } else if (task === "report") {
+    const started = performance.now();
+    const { report, usage } = await draftWeeklyReport(user.id, rest[0] ?? today, { dryRun: true });
+    console.log(`Okres: ${report.periodStart} – ${report.periodEnd}\n`);
+    console.log(report.body);
+    console.log("\nCele:", JSON.stringify(report.targets));
+    printUsage(report.model, usage, performance.now() - started);
   } else {
     console.error(`Unknown task: ${task}`);
     process.exit(1);

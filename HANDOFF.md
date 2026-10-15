@@ -43,6 +43,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 - `WATCH_SYNC_SECRET` — bearer token for `POST /api/watch-sync` (Apple Shortcuts). Generate with `openssl rand -hex 32`. **Must be set on Vercel too**, otherwise the webhook returns 500 `Server misconfigured`.
 - `AI_API_SECRET` — bearer token for `/api/ai/*` (local AI coach). Separate from `WATCH_SYNC_SECRET` on purpose: a leaked token opens one client's route only. Same generation, same "set it on Vercel" rule. Both checks go through `checkBearer()` in `src/lib/api-auth.ts`.
 - `GEMINI_API_KEY` — Gemini API key from Google AI Studio, project `fitness-tracker` (Tier 1, **Prepay** credits, auto-reload off: when the balance hits 0 every key stops — the hard spending cap). Set on Vercel too. The $300 Cloud free trial does **not** pay for Gemini API in AI Studio. Without the key AI features show "AI nie jest skonfigurowane".
+- `CRON_SECRET` — Vercel sends it as `Authorization: Bearer …` to cron routes (`/api/cron/weekly-report`). Generate with `openssl rand -hex 32`, set on Vercel. Not needed in `.env` unless testing the cron locally (`CRON_SECRET=… npm run dev` works too — process env wins over `.env`).
 
 ---
 
@@ -193,6 +194,10 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - `ai_calls` logs every call (tokens incl. thinking, estimated USD, error code) and backs the limit: 40 calls / user / rolling 24 h, plan revision 3. Failed calls count too.
 - Coach brief: `users.coach_brief`, edited in Ustawienia (autosave). Source text kept locally in `scripts/plans/coach-brief.md` (gitignored, like the plan JSON).
 - Cost on real data: 8-week context ≈ 6–7k tokens; a short answer ≈ $0.005.
+- **Stage 2 — weekly report:** `src/lib/ai/report.ts` (`draftWeeklyReport` / `generateWeeklyReport`): last closed Mon–Sun week, 8 weeks of context, JSON `{ body, focus[≤3], targets }` with target names as a Zod `enum` of the user's activities (no unknown names possible); only real target changes are stored. Focus is appended to `body` as "## Fokus na ten tydzień" (no schema change). ≈ 9.5k in / 2.4k out, ~$0.016, 16–23 s.
+  - `/ai-coach` ("AI Trener"): "Nowy raport" button (`generateReportNow`, `updateTag("coach-reports")`), Markdown via `src/components/markdown.tsx` (react-markdown, raw HTML off). The old copy/paste export is collapsed under `<details>`.
+  - Cron: `vercel.json` `0 5 * * 1` (Mon 6–7 Polish time; Hobby fires within the hour) → `GET /api/cron/weekly-report`, bearer `CRON_SECRET`. Users with a brief or a workout since last Monday; skips a user who already has a report with that `period_start` (retry-safe). Uses `revalidateTag(…, "max")`.
+  - The plan header in the context says since when the plan applies, so older sessions aren't judged against it.
 
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"

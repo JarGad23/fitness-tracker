@@ -90,3 +90,17 @@ before testing in dev after a production build.
 came out as a bare `REFERENCES plan_days(id)`.
 **Better:** Read every generated migration; add the `ON DELETE …` by hand before `db:migrate`.
 
+
+### CardHeader is a grid — header rows need `min-w-0`
+**Avoid:** A `flex justify-between` row (title + truncating subtitle + button) placed directly in
+`CardHeader`. The base-nova `CardHeader` is a CSS grid; its child keeps `min-width: auto`, so a
+long `truncate` subtitle widened the row and pushed the "Nowy raport" button out of the card at
+390 px (desktop looked fine).
+**Better:** Put `min-w-0` on the row wrapper *and* the text column inside `CardHeader`. After
+adding a button to a header, measure the button vs. the card's right edge at 390 px.
+
+### AI context must say when the plan started
+**Avoid:** Giving the model the current plan plus 8 weeks of sessions without dates for the plan.
+The first report judged a 05.10 session "off-plan", though the plan only started on 14.10.
+**Better:** Every context fact with a validity window carries it (`Obowiązuje od …`). Run the
+dry run on real data and read the output before wiring the UI.

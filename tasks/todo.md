@@ -19,6 +19,17 @@ Throwaway user: bad key → `misconfigured` logged as failed call; 4th plan call
 390 px fits (no horizontal scroll); test user logged out + deleted.
 
 ## Stage 2 — weekly report (button + Monday cron)
+- [x] `src/lib/ai/report.ts` (draft + save), dry run `report`
+- [x] `generateReportNow` action; `/ai-coach` → "AI Trener", Markdown, "Nowy raport", export collapsed
+- [x] `GET /api/cron/weekly-report` (bearer `CRON_SECRET`, idempotent per week) + `vercel.json` cron
+- [x] Verify: dry runs on real data, cron 401/401/200 + rerun "exists", button on a throwaway user
+      (16.5 s, appears without reload), 390 px, lint + build
+- [ ] Jarek: `CRON_SECRET` on Vercel; after deploy trigger the cron once from the Vercel dashboard
+
+Review stage 2: first dry run judged a pre-plan session against the plan → plan start date
+added to the context. 390 px: the header button overflowed the card (grid `CardHeader`,
+missing `min-w-0`) → fixed and re-measured. The cron run created Jarek's real report for
+05–11.10 ($0.016). Test user logged out + deleted, no orphan rows.
 ## Stage 3 — post-workout comment
 ## Stage 4 — coach chat
 ## Stage 5 — plan revision

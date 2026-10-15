@@ -102,17 +102,24 @@ export default function AiCoachPage() {
   return (
     <div className="p-4 lg:p-0 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">AI Coach Sync</h1>
+        <h1 className="text-2xl font-bold tracking-tight">AI Trener</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Raporty lokalnego trenera oraz eksport tygodnia do zewnętrznego AI
+          Tygodniowe raporty i propozycje celów na podstawie Twoich danych
         </p>
       </div>
       <Suspense fallback={<AiCoachSkeleton cards={1} />}>
         <CoachReportData />
       </Suspense>
-      <Suspense fallback={<AiCoachSkeleton />}>
-        <AiCoachData />
-      </Suspense>
+      <details className="group">
+        <summary className="cursor-pointer select-none text-sm font-medium text-muted-foreground hover:text-foreground">
+          Ręczny eksport i import (wklejanie do zewnętrznego AI)
+        </summary>
+        <div className="mt-4">
+          <Suspense fallback={<AiCoachSkeleton />}>
+            <AiCoachData />
+          </Suspense>
+        </div>
+      </details>
     </div>
   );
 }
