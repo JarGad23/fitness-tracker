@@ -53,3 +53,7 @@ scripts/shortcuts/out/
 
 # Local DB dumps (contain personal data)
 .backups/
+
+# Personal training plans and coach brief (body data, injury details)
+scripts/plans/*.json
+scripts/plans/*.md
