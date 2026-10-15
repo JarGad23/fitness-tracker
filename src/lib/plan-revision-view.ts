@@ -6,6 +6,9 @@ import { formatRepRange } from "@/lib/plan";
 // come from the snapshot stored with each change; the current plan only decides
 // whether a pending change still applies.
 
+/** Cap on the user's own wish sent with "Zaproponuj zmiany" (shared by the form and the action). */
+export const MAX_REQUEST_LENGTH = 1000;
+
 export type PlanChangeView = {
   index: number;
   type: PlanChange["type"];

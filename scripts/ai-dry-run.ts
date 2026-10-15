@@ -4,7 +4,7 @@
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> ask "Jak mi idzie klatka?"
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> report [YYYY-MM-DD as today]
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> comment [workoutId, default: newest gym session]
-//   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> plan [YYYY-MM-DD as today]
+//   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> plan [YYYY-MM-DD as today] ["user's wish"]
 import { eq } from "drizzle-orm";
 import { db } from "../src/lib/db";
 import { users } from "../src/lib/db/schema";
@@ -87,7 +87,7 @@ async function main() {
     printUsage(AI_MODELS.comment, result.usage!, performance.now() - started);
   } else if (task === "plan") {
     const started = performance.now();
-    const draft = await draftPlanRevision(user.id, rest[0] ?? today, { dryRun: true });
+    const draft = await draftPlanRevision(user.id, rest[0] || today, { dryRun: true, request: rest[1] });
     if (!draft) throw new Error("No training plan");
     const names = new Map(
       draft.plan.days.flatMap((d) => d.exercises.map((e) => [e.id, `${d.label}: ${e.exercise.name}`]))

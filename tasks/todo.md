@@ -30,6 +30,20 @@ Review stage 2: first dry run judged a pre-plan session against the plan → pla
 added to the context. 390 px: the header button overflowed the card (grid `CardHeader`,
 missing `min-w-0`) → fixed and re-measured. The cron run created Jarek's real report for
 05–11.10 ($0.016). Test user logged out + deleted, no orphan rows.
+
+## Follow-up — user's own wish for the plan review (2026-10-15)
+- [x] Optional "Czego chcesz?" textarea on the review card → `proposePlanRevision(request)`
+      → extra "Prośba użytkownika" prompt section (wish needs no data backing, brief limits
+      still win, says in summary what it won't do); cap 1000 chars; dry run takes it as 2nd arg
+- [x] Verify: dry run on Jarek's data (landmine swap + calves done, heavy OHP refused for the
+      shoulder); throwaway user at desktop + 390 px, typed wish reached the action, change
+      card rendered, field cleared; lint + build. Test user logged out + deleted.
+- Cleanup: `fbw-abc.json` untracked (it never was, despite an earlier claim), stage 5 test
+  seed script removed.
+
+Review: one argon call took 114 s (dry run of the same kind: 11 s) → loading copy now says
+"1–2 minuty". Typing into a same-origin iframe through the parent window's value setter
+didn't reach React state — the first test sent an empty wish; real typing worked.
 ## Stage 3 — post-workout comment
 - [x] Migration 0011: `workouts.ai_comment`, `ai_comment_at`
 - [x] `src/lib/ai/comment.ts` (session description from code, dry run `comment`)

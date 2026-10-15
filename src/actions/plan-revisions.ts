@@ -9,6 +9,7 @@ import { exercises, planExercises, planRevisions, type PlanChange } from "@/lib/
 import { auth } from "@/lib/auth";
 import { loadTrainingPlan } from "@/lib/ai/context";
 import { generatePlanRevision } from "@/lib/ai/plan-revision";
+import { MAX_REQUEST_LENGTH } from "@/lib/plan-revision-view";
 import { aiErrorMessage } from "@/lib/ai/provider";
 import { exerciseKey, findSimilarExercise } from "@/lib/gym";
 import { todayISO } from "@/lib/utils";
@@ -19,10 +20,15 @@ async function requireUserId() {
   return session.user.id;
 }
 
-export async function proposePlanRevision(): Promise<{ ok: true } | { error: string }> {
+/** `request` is the user's own wish for the plan; without it the review goes by the data. */
+export async function proposePlanRevision(request?: string): Promise<{ ok: true } | { error: string }> {
   const userId = await requireUserId();
+  const wish = request?.trim() || undefined;
+  if (wish && wish.length > MAX_REQUEST_LENGTH) {
+    return { error: `Prośba może mieć najwyżej ${MAX_REQUEST_LENGTH} znaków` };
+  }
   try {
-    const id = await generatePlanRevision(userId, todayISO());
+    const id = await generatePlanRevision(userId, todayISO(), wish);
     if (!id) return { error: "Nie masz planu treningowego" };
   } catch (error) {
     console.error("proposePlanRevision failed:", error);

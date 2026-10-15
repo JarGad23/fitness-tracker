@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowRight, Check, Loader2, Sparkles, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Markdown } from "@/components/markdown";
 import {
   applyPlanChange,
@@ -12,7 +13,7 @@ import {
   rejectPlanChange,
   type ExerciseChoice,
 } from "@/actions/plan-revisions";
-import type { PlanChangeView, PlanRevisionView } from "@/lib/plan-revision-view";
+import { MAX_REQUEST_LENGTH, type PlanChangeView, type PlanRevisionView } from "@/lib/plan-revision-view";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL: Record<PlanChangeView["type"], string> = {
@@ -123,11 +124,13 @@ function ChangeCard({ revisionId, change }: { revisionId: string; change: PlanCh
 
 export function PlanRevisionPanel({ revision }: { revision: PlanRevisionView | null }) {
   const [isGenerating, startGenerating] = useTransition();
+  const [request, setRequest] = useState("");
 
   const propose = () =>
     startGenerating(async () => {
-      const result = await proposePlanRevision();
+      const result = await proposePlanRevision(request);
       if ("error" in result) toast.error(result.error);
+      else setRequest("");
     });
 
   const open = revision?.changes.filter((c) => c.status === "pending").length ?? 0;
@@ -161,9 +164,21 @@ export function PlanRevisionPanel({ revision }: { revision: PlanRevisionView | n
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        <div className="px-4 pb-4 border-b border-border/50">
+          <Textarea
+            value={request}
+            onChange={(e) => setRequest(e.target.value)}
+            maxLength={MAX_REQUEST_LENGTH}
+            rows={2}
+            disabled={isGenerating}
+            aria-label="Czego chcesz w planie?"
+            placeholder="Opcjonalnie: czego chcesz? Np. więcej nóg w dniu B"
+            className="min-h-0"
+          />
+        </div>
         {isGenerating && (
           <p className="px-4 pt-4 text-sm text-muted-foreground">
-            Trener przegląda serie z ostatnich tygodni — to trwa do minuty…
+            Trener przegląda serie z ostatnich tygodni — to może potrwać 1–2 minuty…
           </p>
         )}
         {revision ? (

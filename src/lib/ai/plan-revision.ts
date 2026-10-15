@@ -40,6 +40,15 @@ Nie zmieniasz ciężarów — progresję liczy aplikacja (podwójna progresja). 
 Id bierz z planu ([id: …]). Pole "reason": 1–2 zdania, konkretnie, z odwołaniem do liczb z historii.
 Pole "summary": 2–4 zdania o tym, jak plan działa i co zmieniasz (Markdown, bez nagłówków).`;
 
+// The user's own wish goes first: it doesn't need backing from the history, but the
+// brief's limits (shoulder) still hold, and the model says so instead of complying blindly.
+const requestSection = (request: string) => `## Prośba użytkownika
+Użytkownik sam prosi o zmiany w planie:
+"""
+${request}
+"""
+Zrealizuj tę prośbę zmianami z listy — to jego decyzja, nie potrzebuje uzasadnienia w historii, a limit 5 zmian jej nie dotyczy (łącznie najwyżej ${MAX_CHANGES}). W "reason" napisz, której części prośby dotyczy zmiana. Jeśli coś z prośby kłóci się z ograniczeniami z briefu (np. bark), nie wykonuj tego wprost: zaproponuj bezpieczniejszy wariant i wyjaśnij to w "summary". Jeśli czegoś nie da się zapisać tymi typami zmian (np. kolejność ćwiczeń, rozgrzewka), napisz to w "summary". Inne zmiany wynikające z danych proponuj tylko, jeśli są naprawdę ważne.`;
+
 function revisionSchema(plan: LoadedPlan) {
   const ids = plan.days.flatMap((d) => d.exercises.map((e) => e.id)) as [string, ...string[]];
   const labels = plan.days.map((d) => d.label) as [string, ...string[]];
@@ -216,7 +225,11 @@ async function describeHistory(userId: string, today: string, plan: LoadedPlan) 
 }
 
 /** Builds the revision without saving it (`dryRun` also skips the limit and the log). */
-export async function draftPlanRevision(userId: string, today: string, { dryRun = false } = {}) {
+export async function draftPlanRevision(
+  userId: string,
+  today: string,
+  { dryRun = false, request }: { dryRun?: boolean; request?: string } = {}
+) {
   const plan = await loadTrainingPlan(userId);
   if (!plan) return null;
   const [user, history] = await Promise.all([
@@ -228,7 +241,10 @@ export async function draftPlanRevision(userId: string, today: string, { dryRun 
     briefSection(user?.coachBrief?.trim() || null),
     `## Aktualny plan treningowy\n${formatPlan(plan, { withIds: true })}`,
     `## Zadanie\n${TASK}`,
-  ].join("\n\n");
+    request && requestSection(request),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const model = AI_MODELS.plan;
   const call = (m: string) =>
@@ -249,8 +265,8 @@ export async function draftPlanRevision(userId: string, today: string, { dryRun 
   };
 }
 
-export async function generatePlanRevision(userId: string, today: string) {
-  const draft = await draftPlanRevision(userId, today);
+export async function generatePlanRevision(userId: string, today: string, request?: string) {
+  const draft = await draftPlanRevision(userId, today, { request });
   if (!draft) return null;
   const id = uuid();
   await db.insert(planRevisions).values({ id, ...draft.revision });

@@ -125,3 +125,17 @@ it; use the live data only to decide whether a pending change still applies.
 kept "45–60" as reps, and Face pull ended up twice in day B — both looked like success.
 **Better:** After applying, read the whole day back. Guard unit switches without a new range
 and same-day duplicates both in validation and in the apply action.
+
+### "Untracked" is a claim to check, not to remember
+**Avoid:** Reporting a file as removed from git because a `.gitignore` rule was added. A rule
+doesn't touch files already tracked — `fbw-abc.json` stayed in the public repo for a day.
+**Better:** After untracking, confirm with `git ls-files <path>` (empty) and
+`git check-ignore -v <path>` (matches).
+
+### Filling inputs inside a test iframe
+**Avoid:** Setting a value in an iframe with the *parent* window's
+`HTMLTextAreaElement.prototype` setter + `new Event`. The field looked filled, React state
+stayed empty, and the action got `""`.
+**Better:** Use the iframe's own realm (`f.contentWindow.HTMLTextAreaElement.prototype`,
+`new f.contentWindow.Event(...)`), or type for real on the top-level page. Check what reached
+the server (dev log shows server action arguments) before judging the feature.
