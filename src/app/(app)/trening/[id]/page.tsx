@@ -17,8 +17,18 @@ import { groupSetsByExercise } from "@/lib/gym";
 import { nextPlanDay, suggestSets } from "@/lib/plan";
 import { capitalizeFirst } from "@/lib/utils";
 import { WorkoutSets, type EditorSet, type WorkoutPlan } from "@/components/workout-sets";
+import { WorkoutComment } from "@/components/workout-comment";
 
 type Params = Promise<{ id: string }>;
+
+// Rendered on the server (UTC on Vercel), so the time zone is explicit.
+const commentedFormat = new Intl.DateTimeFormat("pl-PL", {
+  timeZone: "Europe/Warsaw",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 async function WorkoutSection({ params }: { params: Params }) {
   const { id } = await params;
@@ -127,6 +137,15 @@ async function WorkoutSection({ params }: { params: Params }) {
               }
             : null
         }
+      />
+
+      <WorkoutComment
+        workoutId={workout.id}
+        comment={workout.aiComment}
+        commentedLabel={
+          workout.aiCommentAt ? `Wygenerowano ${commentedFormat.format(workout.aiCommentAt)}` : null
+        }
+        hasSets={workout.sets.length > 0}
       />
     </>
   );

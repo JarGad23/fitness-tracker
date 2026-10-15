@@ -31,6 +31,15 @@ added to the context. 390 px: the header button overflowed the card (grid `CardH
 missing `min-w-0`) → fixed and re-measured. The cron run created Jarek's real report for
 05–11.10 ($0.016). Test user logged out + deleted, no orphan rows.
 ## Stage 3 — post-workout comment
+- [x] Migration 0011: `workouts.ai_comment`, `ai_comment_at`
+- [x] `src/lib/ai/comment.ts` (session description from code, dry run `comment`)
+- [x] `commentWorkoutNow` + "Komentarz trenera" card on `/trening/[id]`
+- [x] Verify: dry run on Jarek's 05.10 session; throwaway user with the seeded A/B/C plan:
+      button disabled without sets → enabled after ticking 4 ghost sets → comment in 4.8 s,
+      survives reload; 390 px fits; lint + build
+
+Review stage 3: the first dry run pulled a day note from a week earlier → notes limited to
+the session day and the 3 days before. Test user logged out + deleted, no orphan rows.
 ## Stage 4 — coach chat
 ## Stage 5 — plan revision
 

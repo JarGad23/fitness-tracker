@@ -198,6 +198,8 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
   - `/ai-coach` ("AI Trener"): "Nowy raport" button (`generateReportNow`, `updateTag("coach-reports")`), Markdown via `src/components/markdown.tsx` (react-markdown, raw HTML off). The old copy/paste export is collapsed under `<details>`.
   - Cron: `vercel.json` `0 5 * * 1` (Mon 6–7 Polish time; Hobby fires within the hour) → `GET /api/cron/weekly-report`, bearer `CRON_SECRET`. Users with a brief or a workout since last Monday; skips a user who already has a report with that `period_start` (retry-safe). Uses `revalidateTag(…, "max")`.
   - The plan header in the context says since when the plan applies, so older sessions aren't judged against it.
+- **Stage 3 — post-workout comment:** `src/lib/ai/comment.ts` describes one gym session as text: its sets, the plan day target and `suggestSets()` for next time (numbers from code), the last 3 sessions of each exercise, skipped plan exercises, warm-up/cardio ticks, that day's sleep/HR and day notes from the 3 days before. `generateText`, `thinking: low` → 2–4 sentences, ~4–5 s, ~$0.003. Stored in `workouts.ai_comment` / `ai_comment_at` (migration 0011).
+  - `/trening/[id]`: "Komentarz trenera" card under the sets — "Skomentuj trening" (disabled until a set exists) or the saved comment + refresh. On request, because sets autosave and there's no "session finished" event. `commentWorkoutNow` → `updateTag("gym")`.
 
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"

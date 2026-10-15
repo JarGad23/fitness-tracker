@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { COACH_BRIEF_MAX_LENGTH } from "@/lib/ai/limits";
 import { aiErrorMessage } from "@/lib/ai/provider";
 import { generateWeeklyReport } from "@/lib/ai/report";
+import { commentWorkout } from "@/lib/ai/comment";
 import { todayISO } from "@/lib/utils";
 
 async function requireUserId() {
@@ -36,4 +37,24 @@ export async function generateReportNow(): Promise<{ ok: true } | { error: strin
   }
   updateTag("coach-reports");
   return { ok: true };
+}
+
+export async function commentWorkoutNow(
+  workoutId: string
+): Promise<{ comment: string } | { error: string }> {
+  const userId = await requireUserId();
+  let result;
+  try {
+    result = await commentWorkout(userId, workoutId);
+  } catch (error) {
+    console.error("commentWorkoutNow failed:", error);
+    return { error: aiErrorMessage(error) };
+  }
+  if ("error" in result) {
+    return {
+      error: result.error === "no_sets" ? "Najpierw zapisz serie" : "Nie znaleziono treningu",
+    };
+  }
+  updateTag("gym");
+  return { comment: result.comment };
 }

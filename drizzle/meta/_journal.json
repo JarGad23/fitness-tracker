@@ -78,6 +78,13 @@
       "when": 1792048990821,
       "tag": "0010_ai_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792052154882,
+      "tag": "0011_workout_ai_comment",
+      "breakpoints": true
     }
   ]
 }

@@ -57,6 +57,9 @@ export const workouts = sqliteTable("workouts", {
   planDayId: text("plan_day_id").references(() => planDays.id, { onDelete: "set null" }),
   // Ids of the plan checklist items (warm-up, cardio) ticked off in this session.
   planChecks: text("plan_checks", { mode: "json" }).$type<string[]>(),
+  // AI coach's comment on this gym session, generated on request (Markdown, 2–4 sentences).
+  aiComment: text("ai_comment"),
+  aiCommentAt: integer("ai_comment_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
