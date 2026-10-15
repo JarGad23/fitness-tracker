@@ -12,6 +12,8 @@ import { getWeekRange, getPreviousWeek, toISODateString } from "@/lib/utils";
 import { AiCoachContent } from "@/components/ai-coach-content";
 import { CoachReport, type CoachReportView } from "@/components/coach-report";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { CoachChat } from "@/components/coach-chat";
+import { loadChatMessages } from "@/lib/ai/chat";
 
 async function AiCoachData() {
   const session = await auth();
@@ -85,6 +87,20 @@ async function CoachReportData() {
   return <CoachReport report={view} />;
 }
 
+// Not cached: the thread changes every turn and must never show a stale history.
+async function CoachChatData() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return null;
+
+  const messages = await loadChatMessages(userId);
+  return (
+    <CoachChat
+      initialMessages={messages.map((m) => ({ id: m.id, role: m.role, content: m.content }))}
+    />
+  );
+}
+
 function AiCoachSkeleton({ cards = 2 }: { cards?: number }) {
   return (
     <div className="space-y-4">
@@ -104,9 +120,12 @@ export default function AiCoachPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">AI Trener</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Tygodniowe raporty i propozycje celów na podstawie Twoich danych
+          Rozmowa, tygodniowe raporty i propozycje celów na podstawie Twoich danych
         </p>
       </div>
+      <Suspense fallback={<AiCoachSkeleton cards={1} />}>
+        <CoachChatData />
+      </Suspense>
       <Suspense fallback={<AiCoachSkeleton cards={1} />}>
         <CoachReportData />
       </Suspense>

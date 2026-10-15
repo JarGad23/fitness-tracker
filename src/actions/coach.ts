@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { coachMessages, users } from "@/lib/db/schema";
 import { auth } from "@/lib/auth";
 import { COACH_BRIEF_MAX_LENGTH } from "@/lib/ai/limits";
 import { aiErrorMessage } from "@/lib/ai/provider";
@@ -57,4 +57,10 @@ export async function commentWorkoutNow(
   }
   updateTag("gym");
   return { comment: result.comment };
+}
+
+/** "Nowa rozmowa": the chat thread is deleted, not archived. */
+export async function clearCoachChat() {
+  const userId = await requireUserId();
+  await db.delete(coachMessages).where(eq(coachMessages.userId, userId));
 }

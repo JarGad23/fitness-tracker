@@ -283,6 +283,24 @@ export const aiCalls = sqliteTable(
   (table) => [index("ai_calls_user_created_idx").on(table.userId, table.createdAt)]
 );
 
+// Coach chat: one rolling thread per user, sent whole (last N) to the model each turn.
+// "Nowa rozmowa" deletes the rows.
+export const coachMessages = sqliteTable(
+  "coach_messages",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<"user" | "model">().notNull(),
+    content: text("content").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("coach_messages_user_created_idx").on(table.userId, table.createdAt)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
@@ -384,3 +402,4 @@ export type PlanDay = typeof planDays.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type PlanChecklistItem = typeof planChecklist.$inferSelect;
 export type AICall = typeof aiCalls.$inferSelect;
+export type CoachMessage = typeof coachMessages.$inferSelect;

@@ -41,6 +41,16 @@ missing `min-w-0`) → fixed and re-measured. The cron run created Jarek's real 
 Review stage 3: the first dry run pulled a day note from a week earlier → notes limited to
 the session day and the 3 days before. Test user logged out + deleted, no orphan rows.
 ## Stage 4 — coach chat
+- [x] Migration 0012: `coach_messages`
+- [x] `src/lib/ai/chat.ts` + streaming `POST /api/ai/chat` (save both messages only on success)
+- [x] Chat card on `/ai-coach` (suggestions, stream reader, "Nowa rozmowa" with confirm tap)
+- [x] Verify: 401 without a session; throwaway user: streamed in 9 steps (first text 2.6 s),
+      second turn recalls the first, 4 messages after reload, 390 px fits, clear → 0 rows in
+      DB + suggestions back, filled daily limit → toast + text restored + no empty bubble;
+      lint + build
+
+Review stage 4: the "Usunąć?" intermediate state wasn't captured (the check raced a reload);
+the clear itself was verified in the DB. Test user logged out + deleted, no orphan rows.
 ## Stage 5 — plan revision
 
 # Exercise name suggestions + typo check (2026-10-14)

@@ -200,6 +200,10 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
   - The plan header in the context says since when the plan applies, so older sessions aren't judged against it.
 - **Stage 3 — post-workout comment:** `src/lib/ai/comment.ts` describes one gym session as text: its sets, the plan day target and `suggestSets()` for next time (numbers from code), the last 3 sessions of each exercise, skipped plan exercises, warm-up/cardio ticks, that day's sleep/HR and day notes from the 3 days before. `generateText`, `thinking: low` → 2–4 sentences, ~4–5 s, ~$0.003. Stored in `workouts.ai_comment` / `ai_comment_at` (migration 0011).
   - `/trening/[id]`: "Komentarz trenera" card under the sets — "Skomentuj trening" (disabled until a set exists) or the saved comment + refresh. On request, because sets autosave and there's no "session finished" event. `commentWorkoutNow` → `updateTag("gym")`.
+- **Stage 4 — coach chat:** `coach_messages` (migration 0012, `timestamp_ms` so a turn's two rows keep their order), one thread per user. `POST /api/ai/chat` (session auth, Route Handler because it streams): system prompt = rules + brief + plan + 4 weeks of context; the last 30 messages + the new one go to `streamChat` (`thinking: low`); the answer streams as `text/plain`. **Both messages are saved only after the answer completes** — a failed turn leaves nothing behind and the client puts the text back in the box. Errors before streaming: JSON `{ error }` (429 for the daily limit, else 502).
+  - `/ai-coach`: "Rozmowa z trenerem" card first (history read uncached under Suspense — it changes every turn), suggestion chips when empty, Enter sends / Shift+Enter new line, "Nowa rozmowa" deletes the thread (second tap confirms).
+  - Measured: first text ~2.6 s, full short answer ~4.5 s; the model remembers earlier turns; ~$0.005 per turn.
+
 
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"
