@@ -17,7 +17,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { v4 as uuid, validate as isUuid } from "uuid";
 import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { GYM_PROMPT_MIN_MINUTES, exerciseKey } from "@/lib/gym";
+import { GYM_PROMPT_MIN_MINUTES, WORKOUT_NOTE_MAX_LENGTH, exerciseKey } from "@/lib/gym";
 import { DAY_NOTE_MAX_LENGTH, DAY_TAGS } from "@/lib/day-notes";
 import { todayISO } from "@/lib/utils";
 
@@ -360,6 +360,20 @@ export async function setPlanChecks(workoutId: string, itemIds: string[]) {
   const result = await db
     .update(workouts)
     .set({ planChecks: [...new Set(itemIds)] })
+    .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)));
+  if (result.rowsAffected === 0) throw new Error("Nie znaleziono treningu");
+  updateTag("workouts");
+}
+
+// The session's own note — the same `workouts.notes` the add-activity modal edits.
+export async function saveWorkoutNote(workoutId: string, text: string) {
+  const userId = await requireUserId();
+  const note = text.trim();
+  if (note.length > WORKOUT_NOTE_MAX_LENGTH) throw new Error("Notatka jest za długa");
+
+  const result = await db
+    .update(workouts)
+    .set({ notes: note || null })
     .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)));
   if (result.rowsAffected === 0) throw new Error("Nie znaleziono treningu");
   updateTag("workouts");

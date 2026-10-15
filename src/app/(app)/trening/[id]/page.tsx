@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { parseISO, format } from "date-fns";
 import { pl } from "date-fns/locale";
-import { ArrowLeft, Watch } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { auth } from "@/lib/auth";
 import {
   getCachedWorkoutWithSets,
@@ -18,6 +18,7 @@ import { nextPlanDay, suggestSets } from "@/lib/plan";
 import { capitalizeFirst } from "@/lib/utils";
 import { WorkoutSets, type EditorSet, type WorkoutPlan } from "@/components/workout-sets";
 import { WorkoutComment } from "@/components/workout-comment";
+import { WorkoutNoteEditor } from "@/components/workout-note-editor";
 
 type Params = Promise<{ id: string }>;
 
@@ -113,12 +114,6 @@ async function WorkoutSection({ params }: { params: Params }) {
           <p className="text-sm text-muted-foreground">
             {capitalizeFirst(format(date, "EEEE, d MMMM", { locale: pl }))}
           </p>
-          {workout.notes && (
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-              {workout.source === "watch" && <Watch className="w-4 h-4 shrink-0" />}
-              {workout.notes}
-            </p>
-          )}
         </div>
       </div>
 
@@ -138,6 +133,8 @@ async function WorkoutSection({ params }: { params: Params }) {
             : null
         }
       />
+
+      <WorkoutNoteEditor workoutId={workout.id} note={workout.notes} />
 
       <WorkoutComment
         workoutId={workout.id}

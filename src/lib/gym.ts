@@ -1,5 +1,8 @@
 import type { Exercise, WorkoutSet } from "@/lib/db/schema";
 
+/** Free-text note on one session ("hantle, skos 30°") — read by every AI coach task. */
+export const WORKOUT_NOTE_MAX_LENGTH = 1000;
+
 // A day with at least this many Apple Watch exercise minutes and no workout gets a
 // "was this the gym?" prompt. Short gym sessions happen, so it sits at 30 even
 // though some ~30 min days are just brisk walking — a false hit costs one tap.

@@ -160,7 +160,7 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 
 **Gym phase (2026-09-26):**
 - Modal: picking a `strength` activity turns "Dodaj" into "Rozpocznij trening" → creates the workout and opens `/trening/[id]`. The day list links to the sets page.
-- `/trening/[id]`: exercises as cards, sets with +/- (2.5 kg / 1 rep) or typed values, "+ Seria" copies the last set, a new exercise starts from its last-ever set. Every change saves immediately (Server Action + `useOptimistic`). An empty workout offers "Powtórz ostatni trening" (copies all sets of the previous strength session).
+- `/trening/[id]`: exercises as cards, sets with +/- (2.5 kg / 1 rep) or typed values, "+ Seria" copies the last set, a new exercise starts from its last-ever set. Every change saves immediately (Server Action + `useOptimistic`). An empty workout offers "Powtórz ostatni trening" (copies all sets of the previous strength session). Under the sets: "Notatka do treningu" (`WorkoutNoteEditor`, autosave like the day note) edits `workouts.notes` — the same field as the modal; the coach comment, report/chat context and plan review all read it (e.g. "hantle, skos 30°").
 - `/cwiczenie/[id]`: sessions (kg×reps) + best set.
 - Dashboard: days of the shown week with ≥ `GYM_PROMPT_MIN_MINUTES` (30) exercise minutes, no workout at all and no "Nie" answer get "N min ćwiczeń — to była siłownia?". "Tak" creates a `source = "watch"` gym workout and opens it.
 - Cache tag `gym` for set data; set mutations call `updateTag("gym")`.

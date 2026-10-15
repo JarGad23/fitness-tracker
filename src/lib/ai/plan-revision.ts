@@ -28,6 +28,7 @@ const TASK = `Przejrzyj plan treningowy na tle zapisanych serii (historia ćwicz
 - stagnacja: ten sam ciężar i powtórzenia przez 3+ sesje mimo pełnych serii,
 - ćwiczenie stale pomijane albo wykonywane zamiennikiem,
 - ból lub problem w notatkach dni (zwłaszcza ograniczenia z briefu, np. bark),
+- notatki do treningów: inny wariant ćwiczenia (np. kąt ławki), zamiennik, uwagi o technice — liczby w historii dotyczą wtedy tego wariantu,
 - zakres powtórzeń wyraźnie za łatwy lub za trudny,
 - rozjazd z celami z briefu.
 Ćwiczenia z mniej niż 3 sesjami zostaw w spokoju — za mało danych. Jeśli nic nie wymaga zmiany, zwróć pustą listę i napisz to w podsumowaniu. Najwyżej 5 zmian.
@@ -154,7 +155,7 @@ export function validateChanges(raw: RawChange[], plan: LoadedPlan): PlanChange[
 const fmtSet = (reps: number, weightKg: number | null, unit: "reps" | "sec") =>
   weightKg != null ? `${weightKg}×${formatReps(reps, unit)}` : `${formatReps(reps, unit)} bw`;
 
-/** Per-exercise history for the last weeks, plus day notes, as text. */
+/** Per-exercise history for the last weeks, plus session and day notes, as text. */
 async function describeHistory(userId: string, today: string, plan: LoadedPlan) {
   const since = toISODateString(subWeeks(parseISO(today), REVISION_HISTORY_WEEKS));
   const [rows, notes] = await Promise.all([
@@ -165,6 +166,7 @@ async function describeHistory(userId: string, today: string, plan: LoadedPlan) 
         unit: exercises.unit,
         workoutId: workouts.id,
         date: workouts.date,
+        sessionNote: workouts.notes,
         reps: workoutSets.reps,
         weightKg: workoutSets.weightKg,
       })
@@ -181,7 +183,10 @@ async function describeHistory(userId: string, today: string, plan: LoadedPlan) 
 
   type Session = { workoutId: string; date: string; sets: { reps: number; weightKg: number | null }[] };
   const history = new Map<string, { name: string; unit: "reps" | "sec"; sessions: Session[] }>();
+  // What the sets can't say: a variant ("hantle, skos 30°"), a swap, technique.
+  const sessionNotes = new Map<string, string>();
   for (const row of rows) {
+    if (row.sessionNote) sessionNotes.set(row.workoutId, `- ${row.date}: ${row.sessionNote}`);
     const entry = history.get(row.exerciseId) ?? { name: row.name, unit: row.unit, sessions: [] };
     const last = entry.sessions.at(-1);
     const set = { reps: row.reps, weightKg: row.weightKg };
@@ -212,6 +217,9 @@ async function describeHistory(userId: string, today: string, plan: LoadedPlan) 
     for (const [, entry] of outside) {
       lines.push(`- ${entry.name}: ${entry.sessions.length} sesji, ostatnio ${entry.sessions.at(-1)!.date}`);
     }
+  }
+  if (sessionNotes.size > 0) {
+    lines.push("", "Notatki do treningów:", ...sessionNotes.values());
   }
   const tagLabel = new Map<string, string>(DAY_TAGS.map((t) => [t.key, t.label]));
   if (notes.length > 0) {

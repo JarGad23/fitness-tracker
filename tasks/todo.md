@@ -336,6 +336,13 @@ wasn't worn. Shortcuts cannot read workouts directly.
   - [x] "Watch Sync v3" live in the 11:00 automation; first run verified in the DB
 - [x] Phase 0 cleanup: `turbopack: {}` fixes `npm run dev`; WSL/Windows rules removed from CLAUDE.md / HANDOFF.md / lessons.md; obsolete `scripts/test-watch-sync.ps1` and `scripts/migrate.ts` deleted; `__drizzle_migrations` baseline documented as a prerequisite for the next migration
 
+## Follow-up — session note on `/trening/[id]` (2026-10-15)
+- [x] "Notatka do treningu" card under the sets → `saveWorkoutNote` (`workouts.notes`, ≤1000
+      chars, empty → null); header no longer repeats the note
+- [x] Plan review history gets "Notatki do treningów" + a TASK line (variant / angle / swap)
+- [x] Verify: throwaway user, typed note → "Zapisano", survives reload, 390 px with sibling
+      cards; lint + build. Test user logged out + deleted.
+
 ## Review
 - Old shortcut bug found: date filter operator 1002 = "is today", not "last 7 days" → only
   morning calories were ever sent. v2 uses 1001 (last N days), copied from the Sen shortcut.
