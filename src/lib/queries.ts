@@ -10,6 +10,7 @@ import {
   dayNotes,
   trainingPlans,
   users,
+  planRevisions,
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, ne, desc, sql, inArray, isNotNull } from "drizzle-orm";
 import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
@@ -381,4 +382,17 @@ export async function getCachedCoachBrief(userId: string) {
     columns: { coachBrief: true },
   });
   return user?.coachBrief ?? null;
+}
+
+// Long stale is safe: every revision action calls updateTag("plan-revisions").
+export async function getCachedLatestPlanRevision(userId: string) {
+  "use cache";
+  cacheTag("plan-revisions");
+  cacheLife("hours");
+
+  const revision = await db.query.planRevisions.findFirst({
+    where: eq(planRevisions.userId, userId),
+    orderBy: [desc(planRevisions.createdAt)],
+  });
+  return revision ?? null;
 }

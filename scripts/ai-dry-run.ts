@@ -4,6 +4,7 @@
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> ask "Jak mi idzie klatka?"
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> report [YYYY-MM-DD as today]
 //   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> comment [workoutId, default: newest gym session]
+//   npx tsx --env-file=.env scripts/ai-dry-run.ts <email> plan [YYYY-MM-DD as today]
 import { eq } from "drizzle-orm";
 import { db } from "../src/lib/db";
 import { users } from "../src/lib/db/schema";
@@ -15,6 +16,7 @@ import type { AIUsage } from "../src/lib/ai/provider";
 import { todayISO } from "../src/lib/utils";
 import { draftWeeklyReport } from "../src/lib/ai/report";
 import { commentWorkout } from "../src/lib/ai/comment";
+import { draftPlanRevision } from "../src/lib/ai/plan-revision";
 import { workouts, workoutSets } from "../src/lib/db/schema";
 import { and, desc, inArray } from "drizzle-orm";
 
@@ -29,7 +31,7 @@ function printUsage(model: string, usage: AIUsage, ms: number) {
 async function main() {
   const [email, task, ...rest] = process.argv.slice(2);
   if (!email || !task) {
-    console.error("Usage: ai-dry-run.ts <email> <context|ask|report|comment> [args]");
+    console.error("Usage: ai-dry-run.ts <email> <context|ask|report|comment|plan> [args]");
     process.exit(1);
   }
 
@@ -83,6 +85,24 @@ async function main() {
     console.log(result.input, "\n\n---\n");
     console.log(result.comment);
     printUsage(AI_MODELS.comment, result.usage!, performance.now() - started);
+  } else if (task === "plan") {
+    const started = performance.now();
+    const draft = await draftPlanRevision(user.id, rest[0] ?? today, { dryRun: true });
+    if (!draft) throw new Error("No training plan");
+    const names = new Map(
+      draft.plan.days.flatMap((d) => d.exercises.map((e) => [e.id, `${d.label}: ${e.exercise.name}`]))
+    );
+    console.log(draft.revision.summary, "\n");
+    console.log(`Changes: ${draft.revision.changes.length} valid of ${draft.rawCount}`);
+    for (const c of draft.revision.changes) {
+      const target = c.planExerciseId ? names.get(c.planExerciseId) : `${c.dayLabel}: (new)`;
+      const fields = Object.entries({ name: c.exerciseName, unit: c.unit, sets: c.sets, repMin: c.repMin, repMax: c.repMax, tips: c.tips, alternative: c.alternative })
+        .filter(([, v]) => v != null)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(" ");
+      console.log(`\n[${c.type}] ${target} ${fields}\n  ${c.reason}`);
+    }
+    printUsage(draft.revision.model, draft.usage, performance.now() - started);
   } else {
     console.error(`Unknown task: ${task}`);
     process.exit(1);

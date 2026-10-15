@@ -1,7 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { getCachedTrainingPlan, getCachedLastPlanDayId } from "@/lib/queries";
+import {
+  getCachedTrainingPlan,
+  getCachedLastPlanDayId,
+  getCachedLatestPlanRevision,
+} from "@/lib/queries";
+import { planRevisionView } from "@/lib/plan-revision-view";
+import { PlanRevisionPanel } from "@/components/plan-revision-panel";
 import { formatRepRange, nextPlanDay } from "@/lib/plan";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlanChecklistItem } from "@/lib/db/schema";
@@ -12,14 +18,24 @@ const SECTIONS: { key: PlanChecklistItem["section"]; title: string }[] = [
   { key: "home", title: "Domowy pakiet na bark" },
 ];
 
+// Rendered on the server (UTC on Vercel), so the time zone is explicit.
+const createdFormat = new Intl.DateTimeFormat("pl-PL", {
+  timeZone: "Europe/Warsaw",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 async function PlanSection() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const [plan, lastPlanDayId] = await Promise.all([
+  const [plan, lastPlanDayId, revision] = await Promise.all([
     getCachedTrainingPlan(userId),
     getCachedLastPlanDayId(userId),
+    getCachedLatestPlanRevision(userId),
   ]);
   if (!plan) {
     return (
@@ -39,6 +55,14 @@ async function PlanSection() {
           {next && ` · następny: ${next.label}`}
         </p>
       </div>
+
+      <PlanRevisionPanel
+        revision={
+          revision && revision.planId === plan.id
+            ? planRevisionView(revision, plan, createdFormat.format(revision.createdAt))
+            : null
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         {plan.days.map((day) => (

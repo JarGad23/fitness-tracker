@@ -187,7 +187,7 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - Warm-up and cardio checklists tick into `workouts.plan_checks` (client sends the full list). `/plan` shows days, checklists (incl. the home shoulder routine) and notes. Desktop sidebar link only — the mobile header has no room for a fifth icon; phones reach it from the dashboard card.
 - AI context: `exercises[].unit` added (additive, still `version: 1`).
 
-**In-app AI via Gemini (2026-10-15, in progress — plan in `tasks/todo.md`):** stage 1 (foundation) done.
+**In-app AI via Gemini (2026-10-15, all 5 stages done — plan in `tasks/todo.md`):**
 - Provider-neutral `AIProvider` (`generateJson` with a Zod schema → `z.toJSONSchema` for Gemini + `safeParse` on the answer, `generateText`, `streamChat`); swap providers in `src/lib/ai/index.ts`.
 - Every call is stateless (`store: false`): no conversation is kept on Google's side; chat history will live in our DB.
 - Models: `gemini-3.8-flash` (report, comment, chat; chat/comment with `thinking_level: "low"` → ~3 s instead of ~15 s), `gemini-4-argon` (plan revision). 2.5 models are refused for new keys.
@@ -203,6 +203,10 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - **Stage 4 — coach chat:** `coach_messages` (migration 0012, `timestamp_ms` so a turn's two rows keep their order), one thread per user. `POST /api/ai/chat` (session auth, Route Handler because it streams): system prompt = rules + brief + plan + 4 weeks of context; the last 30 messages + the new one go to `streamChat` (`thinking: low`); the answer streams as `text/plain`. **Both messages are saved only after the answer completes** — a failed turn leaves nothing behind and the client puts the text back in the box. Errors before streaming: JSON `{ error }` (429 for the daily limit, else 502).
   - `/ai-coach`: "Rozmowa z trenerem" card first (history read uncached under Suspense — it changes every turn), suggestion chips when empty, Enter sends / Shift+Enter new line, "Nowa rozmowa" deletes the thread (second tap confirms).
   - Measured: first text ~2.6 s, full short answer ~4.5 s; the model remembers earlier turns; ~$0.005 per turn.
+- **Stage 5 — plan revision:** `plan_revisions` (migration 0013) holds a summary + `changes` JSON (`PlanChange`: update / replace / add / remove, each with `reason`, `status` pending/applied/rejected and a `before` snapshot of its target). `src/lib/ai/plan-revision.ts`: `gemini-4-argon` (default thinking, ~15–60 s, ~$0.03) gets rules + brief + the plan **with plan_exercise ids** + 8 weeks of sets grouped per exercise (with the app's next-session hint) + day notes. Ids and day labels are Zod enums; `validateChanges` drops no-ops, min > max, duplicates per target, a replace/add that would duplicate an exercise in the same day, and seconds↔reps switches without a new range; max 8 kept (enforced in code — Gemini 400s on `maxItems` for this array).
+  - `/plan`: "Przegląd planu przez AI" card (latest revision for the current plan): "Zaproponuj zmiany", per change Zastosuj / Odrzuć. `src/actions/plan-revisions.ts` `applyPlanChange` re-checks against the live plan (target gone → "odrzuć tę zmianę"), reuses an exercise with the same name, asks "Czy chodziło o…?" via `findSimilarExercise` (never auto-merges), creates new exercises with the proposed unit; one `db.batch` per change. Tags: `plan`, `plan-revisions` (+ `gym` when an exercise is created).
+  - Limit: 3 revisions / user / 24 h (`DAILY_LIMIT_BY_KIND.plan`).
+
 
 
 ```bash

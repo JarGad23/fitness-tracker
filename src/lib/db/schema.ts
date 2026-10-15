@@ -301,6 +301,53 @@ export const coachMessages = sqliteTable(
   (table) => [index("coach_messages_user_created_idx").on(table.userId, table.createdAt)]
 );
 
+// AI-proposed changes to a training plan. Nothing in the plan changes until the user
+// applies a change on /plan; each change keeps its own status.
+export type PlanChange = {
+  type: "update" | "replace" | "add" | "remove";
+  planExerciseId: string | null; // update / replace / remove
+  dayLabel: string | null; // add
+  exerciseName: string | null; // replace / add
+  unit: "reps" | "sec" | null; // a new exercise's unit
+  sets: number | null;
+  repMin: number | null;
+  repMax: number | null;
+  tips: string | null;
+  alternative: string | null;
+  reason: string;
+  status: "pending" | "applied" | "rejected";
+  // The targeted plan exercise as it was when proposed (null for "add"), so the change
+  // still reads right after it's applied and the plan no longer looks like this.
+  before: {
+    exerciseName: string;
+    dayLabel: string;
+    unit: "reps" | "sec";
+    sets: number;
+    repMin: number;
+    repMax: number;
+  } | null;
+};
+
+export const planRevisions = sqliteTable(
+  "plan_revisions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => trainingPlans.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    summary: text("summary").notNull(),
+    changes: text("changes", { mode: "json" }).$type<PlanChange[]>().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("plan_revisions_user_created_idx").on(table.userId, table.createdAt)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
@@ -403,3 +450,4 @@ export type PlanExercise = typeof planExercises.$inferSelect;
 export type PlanChecklistItem = typeof planChecklist.$inferSelect;
 export type AICall = typeof aiCalls.$inferSelect;
 export type CoachMessage = typeof coachMessages.$inferSelect;
+export type PlanRevision = typeof planRevisions.$inferSelect;

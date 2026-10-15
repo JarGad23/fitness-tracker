@@ -52,6 +52,22 @@ the session day and the 3 days before. Test user logged out + deleted, no orphan
 Review stage 4: the "Usunąć?" intermediate state wasn't captured (the check raced a reload);
 the clear itself was verified in the DB. Test user logged out + deleted, no orphan rows.
 ## Stage 5 — plan revision
+- [x] Migration 0013: `plan_revisions` (changes JSON with status + `before` snapshot)
+- [x] `src/lib/ai/plan-revision.ts` (argon, ids as enums, `validateChanges`), dry run `plan`
+- [x] Actions: propose / apply (live re-check, "Czy chodziło o…?", one batch) / reject
+- [x] "Przegląd planu przez AI" card on `/plan`
+- [x] Verify: Jarek's real data → 0 changes ("not enough sessions yet"); throwaway user with
+      15 synthetic sessions (stuck bench + shoulder-pain notes, Face pull always skipped) →
+      replace bench, replace Face pull, widen lunge range; apply / reject in the UI, plan
+      cards update, `/trening` day A starts with the new exercise; near-duplicate prompt
+      ("Face pul" → "Tak, użyj Face pull"); guards (same-day duplicate, seconds↔reps) block
+      with a message; `validateChanges` cases; 390 px; lint + build
+
+Review stage 5: Gemini 400 → bisected to `maxItems` on the changes array (lesson). Applied
+changes rendered against the live plan ("hantle → hantle") → `before` snapshot. The
+near-duplicate test exposed unit and same-day duplicate problems → guarded in both places.
+One argon call took 59 s (others 14–23 s) — UI copy says "do minuty". Test user logged out
++ deleted, no orphan rows.
 
 # Exercise name suggestions + typo check (2026-10-14)
 

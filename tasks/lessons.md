@@ -104,3 +104,24 @@ adding a button to a header, measure the button vs. the card's right edge at 390
 The first report judged a 05.10 session "off-plan", though the plan only started on 14.10.
 **Better:** Every context fact with a validity window carries it (`Obowiązuje od …`). Run the
 dry run on real data and read the output before wiring the UI.
+
+### Gemini structured output: a bare 400 means "bisect the schema"
+**Avoid:** Guessing at the cause of `400 Request contains an invalid argument` and shipping a
+speculative fix (I first rewrote every nullable `anyOf` into `type: [X, "null"]` — no effect).
+The real cause was `maxItems` (Zod `.max()`) on an array of 11-field objects; the same
+keyword on a simple array is fine, and every field alone was fine.
+**Better:** Bisect with real calls: each field alone, then fields cumulatively, then top-level
+keywords. Revert any fix the bisect didn't prove. Enforce counts like "max 8 items" in code
+after `safeParse`, not in the schema sent to Gemini.
+
+### Records that describe a change must snapshot the "before"
+**Avoid:** Rendering an applied plan change by looking up its target in the *current* plan —
+after "Wyciskanie sztangi → hantle" was applied, the card read "hantle → hantle".
+**Better:** Store the target's state with the proposal (`PlanChange.before`) and render from
+it; use the live data only to decide whether a pending change still applies.
+
+### A test that "applies" must also test what the change does to its neighbours
+**Avoid:** Checking only that a plan change lands. Replacing a plank (seconds) with Face pull
+kept "45–60" as reps, and Face pull ended up twice in day B — both looked like success.
+**Better:** After applying, read the whole day back. Guard unit switches without a new range
+and same-day duplicates both in validation and in the apply action.
