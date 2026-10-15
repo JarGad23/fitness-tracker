@@ -12,6 +12,8 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  // Free-text context for the AI coach (goals, injuries, preferences), edited in Settings.
+  coachBrief: text("coach_brief"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -256,6 +258,28 @@ export const planChecklist = sqliteTable(
   (table) => [index("plan_checklist_plan_idx").on(table.planId)]
 );
 
+// One row per AI provider call: the cost log and the source of the daily rate limit.
+export const aiCalls = sqliteTable(
+  "ai_calls",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<"report" | "comment" | "chat" | "plan">().notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"), // incl. thinking tokens (billed as output)
+    costUsd: real("cost_usd"),
+    ok: integer("ok", { mode: "boolean" }).notNull(),
+    errorCode: text("error_code"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("ai_calls_user_created_idx").on(table.userId, table.createdAt)]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activityTypes: many(activityTypes),
@@ -356,3 +380,4 @@ export type TrainingPlan = typeof trainingPlans.$inferSelect;
 export type PlanDay = typeof planDays.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type PlanChecklistItem = typeof planChecklist.$inferSelect;
+export type AICall = typeof aiCalls.$inferSelect;

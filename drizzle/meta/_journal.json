@@ -71,6 +71,13 @@
       "when": 1791977579984,
       "tag": "0009_training_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792048990821,
+      "tag": "0010_ai_calls",
+      "breakpoints": true
     }
   ]
 }

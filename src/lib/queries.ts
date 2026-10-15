@@ -9,6 +9,7 @@ import {
   coachReports,
   dayNotes,
   trainingPlans,
+  users,
 } from "@/lib/db/schema";
 import { eq, and, gte, lte, ne, desc, sql, inArray, isNotNull } from "drizzle-orm";
 import { GYM_PROMPT_MIN_MINUTES } from "@/lib/gym";
@@ -367,4 +368,17 @@ export async function getCachedLatestCoachReport(userId: string) {
     orderBy: [desc(coachReports.createdAt)],
   });
   return report ?? null;
+}
+
+// Long stale is safe: saveCoachBrief calls updateTag("coach-brief").
+export async function getCachedCoachBrief(userId: string) {
+  "use cache";
+  cacheTag("coach-brief");
+  cacheLife("days");
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { coachBrief: true },
+  });
+  return user?.coachBrief ?? null;
 }

@@ -195,8 +195,10 @@ function ActivityTypeForm({
 
 export function SettingsContent({
   activityTypes: initialActivityTypes,
+  coachBriefCard,
 }: {
   activityTypes: ActivityType[];
+  coachBriefCard: React.ReactNode;
 }) {
   const [editingType, setEditingType] = useState<ActivityType | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -337,6 +339,8 @@ export function SettingsContent({
           )}
         </CardContent>
       </Card>
+
+      {coachBriefCard}
     </div>
   );
 }

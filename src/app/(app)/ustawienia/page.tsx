@@ -1,7 +1,8 @@
 import { Suspense } from "react";
-import { getCachedActivityTypes } from "@/lib/queries";
+import { getCachedActivityTypes, getCachedCoachBrief } from "@/lib/queries";
 import { auth } from "@/lib/auth";
 import { SettingsContent } from "@/components/settings-content";
+import { CoachBriefEditor } from "@/components/coach-brief-editor";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 async function SettingsData() {
@@ -9,8 +10,16 @@ async function SettingsData() {
   const userId = session?.user?.id;
   if (!userId) return null;
 
-  const activityTypes = await getCachedActivityTypes(userId);
-  return <SettingsContent activityTypes={activityTypes} />;
+  const [activityTypes, coachBrief] = await Promise.all([
+    getCachedActivityTypes(userId),
+    getCachedCoachBrief(userId),
+  ]);
+  return (
+    <SettingsContent
+      activityTypes={activityTypes}
+      coachBriefCard={<CoachBriefEditor brief={coachBrief} />}
+    />
+  );
 }
 
 function SettingsSkeleton() {

@@ -1,3 +1,28 @@
+# AI in the app via Gemini API (2026-10-15)
+
+Plan: `~/.claude/plans/polymorphic-nibbling-lagoon.md`. Stop after each stage for Jarek's review.
+
+## Stage 1 — foundation
+- [x] Deps: `@google/genai`, `zod`, `react-markdown`
+- [x] `src/lib/ai/`: models, provider interface, Gemini (Interactions API, `store: false`), `AIError`
+- [x] Migration 0010: `users.coach_brief`, `ai_calls`
+- [x] `withAICall` guard: daily limit + usage/cost log
+- [x] Prompts + context builder (brief, plan, `buildAIContext`)
+- [x] Coach brief card in Settings (autosave)
+- [x] `scripts/ai-dry-run.ts`
+- [x] Verify: migrate, tsc, lint, real dry-run call, error mapping, limit
+
+Review stage 1: migration 0010 applied to Turso; tsc + lint + `next build` clean. Real call
+on Jarek's data via dry run (8 weeks ≈ 6.3k input tokens; `low` thinking: 3.2 s, ~$0.005).
+Throwaway user: bad key → `misconfigured` logged as failed call; 4th plan call and 41st call
+→ `daily_limit`; cascade delete leaves no rows. Brief card: autosave → reload keeps text,
+390 px fits (no horizontal scroll); test user logged out + deleted.
+
+## Stage 2 — weekly report (button + Monday cron)
+## Stage 3 — post-workout comment
+## Stage 4 — coach chat
+## Stage 5 — plan revision
+
 # Exercise name suggestions + typo check (2026-10-14)
 
 - [x] `searchKey` (case + accents, ł→l), `matchExercises` (typed words as substrings),

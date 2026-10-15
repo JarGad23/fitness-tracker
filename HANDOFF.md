@@ -42,6 +42,7 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 - For deploy: also set `AUTH_URL` to the real origin. `AUTH_SECRET` can be regenerated with `openssl rand -base64 32` (logs everyone out, harmless).
 - `WATCH_SYNC_SECRET` — bearer token for `POST /api/watch-sync` (Apple Shortcuts). Generate with `openssl rand -hex 32`. **Must be set on Vercel too**, otherwise the webhook returns 500 `Server misconfigured`.
 - `AI_API_SECRET` — bearer token for `/api/ai/*` (local AI coach). Separate from `WATCH_SYNC_SECRET` on purpose: a leaked token opens one client's route only. Same generation, same "set it on Vercel" rule. Both checks go through `checkBearer()` in `src/lib/api-auth.ts`.
+- `GEMINI_API_KEY` — Gemini API key from Google AI Studio, project `fitness-tracker` (Tier 1, **Prepay** credits, auto-reload off: when the balance hits 0 every key stops — the hard spending cap). Set on Vercel too. The $300 Cloud free trial does **not** pay for Gemini API in AI Studio. Without the key AI features show "AI nie jest skonfigurowane".
 
 ---
 
@@ -92,6 +93,8 @@ Development machine: **macOS (Apple Silicon)**, Node 26, npm 11. The old Windows
 | AI Coach page + UI | `src/app/(app)/ai-coach/page.tsx`, `src/components/ai-coach-content.tsx` |
 | Apple Watch webhook | `src/app/api/watch-sync/route.ts` |
 | Local AI coach API (contract in §8) | `src/app/api/ai/context/route.ts`, `src/app/api/ai/reports/route.ts`, `src/lib/ai-context.ts` (pure JSON builder), `src/components/coach-report.tsx` |
+| In-app AI coach (Gemini) | `src/lib/ai/` — `provider.ts` (interface + `AIError`), `gemini.ts` (Interactions API, `store: false`), `models.ts` (model per feature, prices, limits), `guard.ts` (daily limit + `ai_calls` log), `context.ts` + `prompts.ts` (brief, plan, `buildAIContext`) |
+| AI dry run on real data (no writes) | `scripts/ai-dry-run.ts` |
 | Bearer auth for machine clients | `src/lib/api-auth.ts` |
 | Day notes: tags, editor, actions | `src/lib/day-notes.ts`, `src/components/day-note-editor.tsx`, `src/actions/day-notes.ts` |
 | Health payload parsing (v2 shortcut) | `src/lib/health-sync.ts` |
@@ -182,6 +185,14 @@ Core tracker (dashboard, month calendar, week nav, history, settings with icon/c
 - Double progression (`src/lib/plan.ts`): working sets = last session's sets at its heaviest weight; all ≥ planned count and at the top of the range → +2.5 kg at the bottom of the range, else same weight with last reps (clamped to the range). No history → empty weight ("kg" placeholder).
 - Warm-up and cardio checklists tick into `workouts.plan_checks` (client sends the full list). `/plan` shows days, checklists (incl. the home shoulder routine) and notes. Desktop sidebar link only — the mobile header has no room for a fifth icon; phones reach it from the dashboard card.
 - AI context: `exercises[].unit` added (additive, still `version: 1`).
+
+**In-app AI via Gemini (2026-10-15, in progress — plan in `tasks/todo.md`):** stage 1 (foundation) done.
+- Provider-neutral `AIProvider` (`generateJson` with a Zod schema → `z.toJSONSchema` for Gemini + `safeParse` on the answer, `generateText`, `streamChat`); swap providers in `src/lib/ai/index.ts`.
+- Every call is stateless (`store: false`): no conversation is kept on Google's side; chat history will live in our DB.
+- Models: `gemini-3.8-flash` (report, comment, chat; chat/comment with `thinking_level: "low"` → ~3 s instead of ~15 s), `gemini-4-argon` (plan revision). 2.5 models are refused for new keys.
+- `ai_calls` logs every call (tokens incl. thinking, estimated USD, error code) and backs the limit: 40 calls / user / rolling 24 h, plan revision 3. Failed calls count too.
+- Coach brief: `users.coach_brief`, edited in Ustawienia (autosave). Source text kept locally in `scripts/plans/coach-brief.md` (gitignored, like the plan JSON).
+- Cost on real data: 8-week context ≈ 6–7k tokens; a short answer ≈ $0.005.
 
 ```bash
 curl -H "Authorization: Bearer $AI_API_SECRET" "https://<host>/api/ai/context?user_email=<email>&weeks=4&today=$(date +%F)"
